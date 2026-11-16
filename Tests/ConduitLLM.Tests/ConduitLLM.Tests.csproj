@@ -50,6 +50,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\ConduitLLM.Benchmarks\Messaging\HarnessSupport.cs" Link="Messaging\TransportHarnessSupport.cs" />
+    <Compile Include="..\ConduitLLM.Benchmarks\Messaging\TransportThroughputHarness.cs" Link="Messaging\TransportThroughputHarness.cs" />
     <Compile Include="..\ConduitLLM.GatewayNativeAotTests\NativeMetricSamples.cs" Link="Gateway\NativeMetricSamples.cs" />
     <Compile Include="..\ConduitLLM.GatewayNativeAotTests\SwitchableTcpProxy.cs" Link="Gateway\SwitchableTcpProxy.cs" />
     <Compile Include="..\ConduitLLM.GatewayNativeAotTests\NativeFixtureDiagnostics.cs" Link="Gateway\NativeFixtureDiagnostics.cs" />

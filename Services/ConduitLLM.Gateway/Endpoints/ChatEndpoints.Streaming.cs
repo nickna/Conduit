@@ -559,7 +559,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 var hasContent = chunk.Choices.Any(c => !string.IsNullOrEmpty(c.Delta?.Content));
                 if (hasContent)
                 {
-                    if (metricsCollector.GetMetrics().TimeToFirstTokenMs == null)
+                    if (!metricsCollector.HasRecordedFirstToken)
                     {
                         metricsCollector.RecordFirstToken();
                     }

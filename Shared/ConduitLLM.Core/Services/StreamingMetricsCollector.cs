@@ -6,6 +6,7 @@ namespace ConduitLLM.Core.Services
     /// <summary>
     /// Collects and tracks performance metrics during streaming operations.
     /// </summary>
+    /// <remarks>Owned by one sequential streaming context; concurrent recording is not supported.</remarks>
     public class StreamingMetricsCollector
     {
         private readonly string _requestId;
@@ -15,7 +16,9 @@ namespace ConduitLLM.Core.Services
         
         private long? _timeToFirstTokenMs;
         private int _tokensGenerated;
-        private readonly List<long> _tokenTimestamps;
+        private long _recordedTimestampCount;
+        private long _firstRecordedTimestampMs;
+        private long _lastRecordedTimestampMs;
         private DateTime _lastEmissionTime;
         private readonly TimeSpan _emissionInterval;
 
@@ -29,10 +32,14 @@ namespace ConduitLLM.Core.Services
             _model = model ?? throw new ArgumentNullException(nameof(model));
             _provider = provider ?? throw new ArgumentNullException(nameof(provider));
             _stopwatch = Stopwatch.StartNew();
-            _tokenTimestamps = new List<long>();
             _lastEmissionTime = DateTime.UtcNow;
             _emissionInterval = emissionInterval ?? TimeSpan.FromSeconds(1);
         }
+
+        /// <summary>
+        /// Whether the first-token marker was recorded. Ordinary token records do not set this marker.
+        /// </summary>
+        public bool HasRecordedFirstToken => _timeToFirstTokenMs.HasValue;
 
         /// <summary>
         /// Records that the first token has been received.
@@ -42,7 +49,7 @@ namespace ConduitLLM.Core.Services
             if (!_timeToFirstTokenMs.HasValue)
             {
                 _timeToFirstTokenMs = _stopwatch.ElapsedMilliseconds;
-                _tokenTimestamps.Add(_timeToFirstTokenMs.Value);
+                RecordTimestamp(_timeToFirstTokenMs.Value);
                 _tokensGenerated = 1;
             }
         }
@@ -53,8 +60,23 @@ namespace ConduitLLM.Core.Services
         public void RecordToken()
         {
             _tokensGenerated++;
-            _tokenTimestamps.Add(_stopwatch.ElapsedMilliseconds);
+            RecordTimestamp(_stopwatch.ElapsedMilliseconds);
         }
+
+        private void RecordTimestamp(long elapsedMs)
+        {
+            if (_recordedTimestampCount == 0)
+                _firstRecordedTimestampMs = elapsedMs;
+            _lastRecordedTimestampMs = elapsedMs;
+            _recordedTimestampCount++;
+        }
+
+        // Adjacent intervals telescope to last minus first. Timestamp count is independent
+        // of TokensGenerated: RecordFirstToken historically resets that reported count even
+        // when ordinary tokens have already been recorded, while retaining their intervals.
+        private double? AverageInterTokenLatencyMs => _recordedTimestampCount > 1
+            ? (_lastRecordedTimestampMs - _firstRecordedTimestampMs) / (double)(_recordedTimestampCount - 1)
+            : null;
 
         /// <summary>
         /// Determines if metrics should be emitted based on the emission interval.
@@ -87,16 +109,7 @@ namespace ConduitLLM.Core.Services
                 CurrentTokensPerSecond = elapsedSeconds > 0 ? _tokensGenerated / elapsedSeconds : 0
             };
 
-            // Calculate average inter-token latency
-            if (_tokenTimestamps.Count() > 1)
-            {
-                var latencies = new List<long>();
-                for (int i = 1; i < _tokenTimestamps.Count(); i++)
-                {
-                    latencies.Add(_tokenTimestamps[i] - _tokenTimestamps[i - 1]);
-                }
-                metrics.AvgInterTokenLatencyMs = latencies.Average();
-            }
+            metrics.AvgInterTokenLatencyMs = AverageInterTokenLatencyMs;
 
             return metrics;
         }
@@ -167,16 +180,7 @@ namespace ConduitLLM.Core.Services
                 }
             }
 
-            // Calculate average inter-token latency
-            if (_tokenTimestamps.Count() > 1)
-            {
-                var latencies = new List<long>();
-                for (int i = 1; i < _tokenTimestamps.Count(); i++)
-                {
-                    latencies.Add(_tokenTimestamps[i] - _tokenTimestamps[i - 1]);
-                }
-                metrics.AvgInterTokenLatencyMs = latencies.Average();
-            }
+            metrics.AvgInterTokenLatencyMs = AverageInterTokenLatencyMs;
 
             // Add token usage data if available
             if (usage != null)

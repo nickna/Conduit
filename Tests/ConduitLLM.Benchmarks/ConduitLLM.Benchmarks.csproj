@@ -5,15 +5,27 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(StreamingMicroOnly)' == 'true'">
+    <DefineConstants>$(DefineConstants);STREAMING_MICRO_ONLY</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(StreamingMicroOnly)' == 'true'">
+    <Compile Remove="Messaging\**\*.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
-    <PackageReference Include="WolverineFx.RuntimeCompilation" PrivateAssets="all" />
+    <!-- The synthetic queue host compiles handlers at runtime. PrivateAssets also
+         excludes publishing by default, so retain this fixture-only closure. -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" PrivateAssets="all" Publish="true" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\ConduitLLM.Core\ConduitLLM.Core.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Messaging.Wolverine\ConduitLLM.Messaging.Wolverine.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Providers\ConduitLLM.Providers.csproj" />
+    <ProjectReference Include="..\..\Services\ConduitLLM.Gateway\ConduitLLM.Gateway.csproj" />
   </ItemGroup>
 
 </Project>

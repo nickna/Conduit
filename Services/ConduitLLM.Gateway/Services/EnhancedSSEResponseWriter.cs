@@ -197,19 +197,19 @@ namespace ConduitLLM.Gateway.Services
             
             var json = JsonSerializer.Serialize(data, GatewayJsonTypeInfo.Require<T>(_jsonOptions));
             var eventData = new StringBuilder();
-            
+
             // Add event type if specified
             if (!string.IsNullOrEmpty(eventType))
             {
                 eventData.AppendLine($"event: {eventType}");
             }
-            
+
             // Add data field
             eventData.AppendLine($"data: {json}");
-            
+
             // Add empty line to signal end of event
             eventData.AppendLine();
-            
+
             var bytes = Encoding.UTF8.GetBytes(eventData.ToString());
             await _response.Body.WriteAsync(bytes, cancellationToken);
             await _response.Body.FlushAsync(cancellationToken);

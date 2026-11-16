@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace ConduitLLM.Tests.Http.Services;
 
-public class EnhancedSSEResponseWriterTests
+public partial class EnhancedSSEResponseWriterTests
 {
     [Theory]
     [InlineData(false)]

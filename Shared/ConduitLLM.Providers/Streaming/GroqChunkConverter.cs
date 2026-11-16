@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using ConduitLLM.Core.Serialization;
 
 using ConduitLLM.Core.Models;
@@ -19,6 +20,27 @@ public static class GroqChunkConverter
         var transformedJson = ExtractGroqUsageJson(providerChunk);
         var context = new CoreHttpJsonContext(new JsonSerializerOptions(options));
         var chunk = JsonSerializer.Deserialize(transformedJson, context.ChatCompletionChunk);
+        if (chunk != null)
+        {
+            chunk.ProviderToolUsage = ExtractHostedToolUsage(providerChunk);
+        }
+
+        return chunk;
+    }
+
+    // The Groq client owns immutable metadata for its stable serializer policy.
+    // Keep the public options overload independent so callers retain custom policies.
+    internal static ChatCompletionChunk? ConvertWithMetadata(
+        JsonElement providerChunk,
+        JsonTypeInfo<ChatCompletionChunk> chunkTypeInfo) =>
+        DeserializeChunk(providerChunk, ExtractGroqUsageJson(providerChunk), chunkTypeInfo);
+
+    private static ChatCompletionChunk? DeserializeChunk(
+        JsonElement providerChunk,
+        string transformedJson,
+        JsonTypeInfo<ChatCompletionChunk> chunkTypeInfo)
+    {
+        var chunk = JsonSerializer.Deserialize(transformedJson, chunkTypeInfo);
         if (chunk != null)
         {
             chunk.ProviderToolUsage = ExtractHostedToolUsage(providerChunk);

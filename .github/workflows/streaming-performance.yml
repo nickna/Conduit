@@ -1,0 +1,137 @@
+name: Phase 3 streaming performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_revision:
+        description: 'Full candidate SHA, ancestor of the checked-out ref'
+        required: true
+        type: string
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/streaming-performance.yml'
+      - 'scripts/performance/phase3/**'
+      - 'Shared/ConduitLLM.Core/Services/StreamingMetricsCollector.cs'
+      - 'Services/ConduitLLM.Gateway/Endpoints/ChatEndpoints.Streaming.cs'
+      - 'Services/ConduitLLM.Gateway/Services/EnhancedSSEResponseWriter.cs'
+      - 'Shared/ConduitLLM.Providers/Streaming/GroqChunkConverter.cs'
+      - 'Shared/ConduitLLM.Providers/Providers/Groq/GroqClient.Chat.cs'
+      - 'Tests/ConduitLLM.Benchmarks/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-performance-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  matched:
+    name: Phase 3 (${{ matrix.arch }}, ${{ matrix.profile }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: main
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+            profile: main
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: pressure
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+            profile: pressure
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: micro-queue
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+            profile: micro-queue
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      CANDIDATE_REVISION: ${{ inputs.candidate_revision || github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify frozen fixture bytes
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-input-integrity.json'
+      - name: Run paired Gateway protocol and financial workloads
+        if: matrix.profile != 'micro-queue'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-paired-gateway.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION
+          -Architecture '${{ matrix.arch }}'
+          -Profile '${{ matrix.profile }}'
+          -OutputDirectory '${{ runner.temp }}/phase3-gateway'
+      - name: Verify paired micro evidence rejection
+        if: matrix.profile == 'micro-queue'
+        working-directory: scripts/performance/phase3
+        run: python -m unittest -q test_analyze_micros.py
+      - name: Verify hidden source inventories
+        if: matrix.profile == 'micro-queue'
+        shell: pwsh
+        run: ./scripts/performance/phase3/test-micro-inventory.ps1 -OutputDirectory '${{ runner.temp }}/phase3-micro-inventory-tests'
+      - name: Verify queue evidence rejection
+        if: matrix.profile == 'micro-queue'
+        shell: pwsh
+        run: ./scripts/performance/phase3/test-queue-report.ps1 -OutputPath '${{ runner.temp }}/phase3-queue-policy/receipt.json'
+      - name: Run paired collector, writer and provider micros
+        if: matrix.profile == 'micro-queue'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-paired-micros.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION
+          -Architecture '${{ matrix.arch }}'
+          -OutputDirectory '${{ runner.temp }}/phase3-micros'
+      - name: Retain micro evidence before the queue sweep
+        if: always() && matrix.profile == 'micro-queue'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-${{ matrix.arch }}-micros
+          path: |
+            ${{ runner.temp }}/phase3-micros
+            !${{ runner.temp }}/phase3-micros/work/source/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Run isolated queue batch and PostgreSQL latency sweep
+        if: matrix.profile == 'micro-queue'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-owned-queue.ps1
+          -BenchmarkDll '${{ runner.temp }}/phase3-micros/work/candidate-queue/ConduitLLM.Benchmarks.dll'
+          -Architecture '${{ matrix.arch }}'
+          -OutputDirectory '${{ runner.temp }}/phase3-queue'
+      - name: Retain sources, individual measurements and financial evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-${{ matrix.arch }}-${{ matrix.profile }}
+          path: |
+            ${{ runner.temp }}/phase3-input-integrity.json
+            ${{ runner.temp }}/phase3-gateway
+            ${{ runner.temp }}/phase3-queue
+            ${{ runner.temp }}/phase3-queue-policy
+            ${{ runner.temp }}/phase3-micro-inventory-tests
+            !${{ runner.temp }}/phase3-gateway/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/work/seed-source/**
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
