@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Shared Node/npm configuration for development and production builds.
-FROM node:22-alpine AS node-base
+FROM node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS node-base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm config set fetch-timeout 600000 && \
@@ -41,9 +41,11 @@ WORKDIR /app/WebAdmin
 RUN mkdir -p public && npm run build
 
 # Production stage - minimal image using Next.js standalone output.
-FROM node:22-alpine AS runner
+FROM node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS runner
 WORKDIR /app
-RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+# The standalone server uses node directly; retain npm in build/dev stages only.
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 && \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
