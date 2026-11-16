@@ -253,7 +253,7 @@ production saturation capacity. The original 8 KiB failures remain separate.
 
 The [ProviderV2 pressure repeat](dotnet11-phase2-native-pressure-v2.json) also
 passed whole-artifact, source/binary, complete-response and exact financial
-replay on both architectures: 60 validated observations, 15 live drains and
+replay on each architecture: 60 validated observations, 15 live drains and
 20 requests for `0.00150000` per source, with no holds. Enhanced-fast throughput
 ratios 0.9074/0.8807 and duration ratios 1.1073/1.1365 repeat the x64/ARM64
 working breaches; standard-paced CPU ratios 1.1280/1.0788 also breach. Sampled
