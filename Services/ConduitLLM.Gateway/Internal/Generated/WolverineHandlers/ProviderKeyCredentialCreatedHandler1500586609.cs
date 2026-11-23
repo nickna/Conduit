@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var providerKeyCredentialCreated = (ConduitLLM.Configuration.Events.ProviderKeyCredentialCreated)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialCreated>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialCreated>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialCreated>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialCreated>");
             var wolverineHandlerBridgeOfProviderKeyCredentialCreated = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialCreated>(eventHandlerOfProviderKeyCredentialCreatedIEnumerable, _loggerOfWolverineHandlerBridgeOfProviderKeyCredentialCreated);
 
             // The actual message execution

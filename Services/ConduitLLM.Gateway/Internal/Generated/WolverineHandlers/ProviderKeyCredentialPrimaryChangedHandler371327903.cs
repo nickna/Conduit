@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var providerKeyCredentialPrimaryChanged = (ConduitLLM.Configuration.Events.ProviderKeyCredentialPrimaryChanged)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialPrimaryChanged>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialPrimaryChanged>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialPrimaryChanged>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialPrimaryChanged>");
             var wolverineHandlerBridgeOfProviderKeyCredentialPrimaryChanged = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyCredentialPrimaryChanged>(eventHandlerOfProviderKeyCredentialPrimaryChangedIEnumerable, _loggerOfWolverineHandlerBridgeOfProviderKeyCredentialPrimaryChanged);
 
             // The actual message execution

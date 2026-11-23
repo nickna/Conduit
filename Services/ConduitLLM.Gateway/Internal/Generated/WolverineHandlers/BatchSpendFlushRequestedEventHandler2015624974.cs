@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var batchSpendFlushRequestedEvent = (ConduitLLM.Configuration.Events.BatchSpendFlushRequestedEvent)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.BatchSpendFlushRequestedEvent>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.BatchSpendFlushRequestedEvent>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.BatchSpendFlushRequestedEvent>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.BatchSpendFlushRequestedEvent>");
             var wolverineHandlerBridgeOfBatchSpendFlushRequestedEvent = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.BatchSpendFlushRequestedEvent>(eventHandlerOfBatchSpendFlushRequestedEventIEnumerable, _loggerOfWolverineHandlerBridgeOfBatchSpendFlushRequestedEvent);
 
             // The actual message execution

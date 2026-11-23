@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var discoveryCacheInvalidationRequested = (ConduitLLM.Core.Events.DiscoveryCacheInvalidationRequested)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.DiscoveryCacheInvalidationRequested>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.DiscoveryCacheInvalidationRequested>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.DiscoveryCacheInvalidationRequested>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.DiscoveryCacheInvalidationRequested>");
             var wolverineHandlerBridgeOfDiscoveryCacheInvalidationRequested = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.DiscoveryCacheInvalidationRequested>(eventHandlerOfDiscoveryCacheInvalidationRequestedIEnumerable, _loggerOfWolverineHandlerBridgeOfDiscoveryCacheInvalidationRequested);
 
             // The actual message execution
