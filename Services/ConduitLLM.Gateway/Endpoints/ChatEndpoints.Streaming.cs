@@ -246,10 +246,9 @@ namespace ConduitLLM.Gateway.Endpoints
             response.Headers["x-request-id"] = requestId;
 
             var modelMapping = await _modelMappingService.GetMappingByModelAliasAsync(request.Model);
-            var providerId = modelMapping?.ProviderId.ToString() ?? "unknown";
-
-            _logger.LogInformation("Creating StreamingMetricsCollector for model {Model}, provider {Provider}", LoggingSanitizer.S(request.Model), providerId);
-            var metricsCollector = new StreamingMetricsCollector(requestId, request.Model, providerId);
+            var metricsCollector = sseWriter.EnhancedEventsEnabled
+                ? new StreamingMetricsCollector(requestId, request.Model, modelMapping?.ProviderId.ToString() ?? "unknown")
+                : null;
             var state = new StreamingAccumulatorState(
                 GetCompletionAccumulatorLimit(request),
                 _usageTrackingOptions.MaximumStreamingToolCallCharacters,
@@ -296,9 +295,10 @@ namespace ConduitLLM.Gateway.Endpoints
                     AccumulateToolCalls(chunk, state);
                     CaptureUsageData(chunk, request, state);
                     state.LastChunk = chunk;
-                    await WriteChunkToStream(chunk, sseWriter, metricsCollector, cancellationToken);
+                    await WriteChunkToStream(chunk, sseWriter, cancellationToken);
                     state.Outcome = StreamTransportOutcome.Emitting;
-                    await EmitPeriodicMetrics(chunk, sseWriter, metricsCollector, cancellationToken);
+                    if (metricsCollector is not null)
+                        await EmitPeriodicMetrics(chunk, sseWriter, metricsCollector, cancellationToken);
                 }
 
                 await WriteStreamingCompletionEventsAsync(request, includeUsage, state, metricsCollector, sseWriter, cancellationToken);
@@ -504,21 +504,22 @@ namespace ConduitLLM.Gateway.Endpoints
             }
         }
 
-        private async Task WriteChunkToStream(
+        private static Task WriteChunkToStream(
             ChatCompletionChunk chunk,
             EnhancedSSEResponseWriter sseWriter,
-            StreamingMetricsCollector metricsCollector,
             CancellationToken cancellationToken)
         {
             if (!sseWriter.EnhancedEventsEnabled)
             {
+                if (chunk.Usage is null)
+                    return sseWriter.WriteContentEventAsync(chunk, cancellationToken);
+
                 // Usage remains in the provider chunk for accounting. The standard stream sends
                 // it once, in a final empty-choices chunk, only when the caller requests it.
-                if (chunk.Usage is not null && chunk.Choices is not { Count: > 0 })
-                {
-                    return;
-                }
-                await sseWriter.WriteContentEventAsync(new ChatCompletionChunk
+                if (chunk.Choices is not { Count: > 0 })
+                    return Task.CompletedTask;
+
+                return sseWriter.WriteContentEventAsync(new ChatCompletionChunk
                 {
                     Id = chunk.Id,
                     Object = chunk.Object,
@@ -527,17 +528,19 @@ namespace ConduitLLM.Gateway.Endpoints
                     SystemFingerprint = chunk.SystemFingerprint,
                     Choices = chunk.Choices
                 }, cancellationToken);
-                return;
             }
+
             if (chunk.Choices?.Count > 0 && !string.IsNullOrEmpty(chunk.Choices[0].Delta?.Reasoning))
-            {
-                await sseWriter.WriteReasoningEventAsync(chunk.Choices[0].Delta.Reasoning!, cancellationToken);
-                await sseWriter.WriteContentEventAsync(chunk, cancellationToken);
-            }
-            else
-            {
-                await sseWriter.WriteContentEventAsync(chunk, cancellationToken);
-            }
+                return WriteReasoningAndContentAsync(chunk.Choices[0].Delta.Reasoning!, chunk, sseWriter, cancellationToken);
+
+            return sseWriter.WriteContentEventAsync(chunk, cancellationToken);
+        }
+
+        private static async Task WriteReasoningAndContentAsync(
+            string reasoning, ChatCompletionChunk chunk, EnhancedSSEResponseWriter writer, CancellationToken cancellationToken)
+        {
+            await writer.WriteReasoningEventAsync(reasoning, cancellationToken);
+            await writer.WriteContentEventAsync(chunk, cancellationToken);
         }
 
         /// <summary>Records content-chunk timing and emits periodic metrics for enhanced SSE streams.</summary>
@@ -665,11 +668,11 @@ namespace ConduitLLM.Gateway.Endpoints
             ChatCompletionRequest request,
             bool includeUsage,
             StreamingAccumulatorState state,
-            StreamingMetricsCollector metricsCollector,
+            StreamingMetricsCollector? metricsCollector,
             EnhancedSSEResponseWriter sseWriter,
             CancellationToken cancellationToken)
         {
-            if (!sseWriter.EnhancedEventsEnabled)
+            if (metricsCollector is null)
             {
                 if (includeUsage &&
                     state.StreamingUsage is not null && state.LastChunk is { } lastChunk)

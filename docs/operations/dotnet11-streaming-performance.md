@@ -4,7 +4,9 @@ Tracking: [phase 3](https://github.com/nickna/Conduit/issues/1767),
 [epic](https://github.com/nickna/Conduit/issues/1763).
 The [phase-2 qualification](dotnet11-managed-qualification.md) gates remain open.
 PR #1772 merged at `b1d49922b8dfdc6719c6d46d123f2eb5a265dcca`; this is the
-before source for these experiments. Both arms use SDK 11.0.100/runtime 11.0.0,
+before source for the historical experiments. The current Gateway PR comparison
+uses the current base commit, including the dependency changes in that commit.
+Both arms use SDK 11.0.100/runtime 11.0.0,
 native Linux hardware and the same default GC policy. Historical qualification
 sources and datasets are unchanged.
 
@@ -14,13 +16,15 @@ sources and datasets are unchanged.
 | --- | --- | --- |
 | Enhanced metrics | Replace retained timestamp/interval lists with first/last/count aggregates. Adjacent intervals telescope to `(last - first) / (count - 1)`. The Gateway reads first-token state directly. Preserve the historical distinction between timestamp count and reported token count, including a late `RecordFirstToken`. | Implemented in #1778; focused behavior and allocation-scale checks pass. Native evidence/adoption status is tracked in #1767. |
 | SSE UTF-8 framing | Prototype commit `483f50eec` serialized through generated metadata directly to UTF-8, then copied into a private frame. It reduced intermediate allocations and retained two byte arrays. | Deferred from production: all four original/repeat architecture blocks exceeded the standard-slow process CPU budget. Attribution remains unresolved; the production writer is restored to the before implementation. Prototype/evidence remain available in [#1781](https://github.com/nickna/Conduit/issues/1781). |
-| Groq metadata | Lazily create immutable generated metadata once for the stable client policy, rather than reconstructing options/context per frame. Keep the public options-taking converter independent and retain its custom/mutable policy behavior. | Candidate in #1778; retain only with paired measurements and protocol/accounting gates recorded in #1767. |
+| Groq metadata | Lazily create immutable generated metadata once for the stable client policy. The prototype kept the public options-taking converter independent. | Deferred to #1782. The mixed-variant benchmark showed a repeatable x64 slowdown in the public-options control, even after its method body was restored. Isolated fresh-process evidence is needed before adopting the private cache. |
 | General provider parsing | Benchmark controls characterize DOM/string/typed alternatives. Existing virtual transform/mapping hooks, malformed-frame exceptions and multiline handling make a generic replacement a compatibility change. | Defer to #1779 until those behaviors are specified and qualified. Micro controls alone do not prove compatibility. |
 | BodyWriter / flush coalescing | The UTF-8 candidate keeps the existing `Body.WriteAsync` followed by `Body.FlushAsync` for each event. Complete serialization before writing protects the wire from converter failure. | Defer to #1780; no benchmark establishes a gain or an acceptable latency/backpressure policy for that alternative. |
 | Spend receive batch | Measure 10/25/50/100 with concurrency one, strict ordering and 250 ms polling. Distinguish handler entry, handler completion and independently observed SQL settlement. | Production policy remains batch 10 pending measured results and a separate adoption decision. No partitioning, handler concurrency or transport change. |
 
-Standard streams already bypass enhanced metrics. Metrics gains therefore must
-not be attributed to standard SSE. Groq measurements are provider-specific;
+Standard streams skip metrics collector construction and per-chunk metrics
+calls. Content chunks without usage go directly to the writer, and standard
+chunks with both choices and usage keep the projection that excludes usage.
+Groq measurements are provider-specific;
 the generic provider stub in the Gateway matrix does not measure Groq's metadata
 optimization. Micro warmups exclude cold metadata initialization and cannot
 establish first-request improvement.
@@ -34,17 +38,21 @@ The UTF-8 prototype is preserved in history, rather than active production code.
 
 ## Reproduction and evidence
 
-The `Phase 3 streaming performance` workflow runs `main`, `pressure` and
-`micro-queue` separately on `ubuntu-24.04` x64 and `ubuntu-24.04-arm` ARM64.
+The `Phase 3 streaming performance` workflow runs `main`, `pressure`,
+`micro-queue` and an identical-binary `control` separately on `ubuntu-24.04`
+x64 and `ubuntu-24.04-arm` ARM64.
 Each job has read-only repository permissions, no production secrets and a
-90-minute deadline. Results are separate artifacts; a successful collection job
-does not accept a performance tradeoff or authorize a rollout.
+90-minute deadline. The control repeats the main workload with copies of the
+same published Gateway and migrator, separate databases and fresh processes.
+It measures variation and cannot satisfy the candidate comparison. The Gateway
+candidate jobs retain their artifacts before checking the existing budgets.
 
 For Gateway qualification, run from a full checkout containing the candidate:
 
 ```powershell
 ./scripts/performance/phase3/run-paired-gateway.ps1 `
-  -CandidateRevision <full-40-character-SHA> -Architecture X64 `
+  -CandidateRevision <full-candidate-SHA> -BaselineRevision <full-base-SHA> `
+  -Architecture X64 `
   -Profile main -OutputDirectory <fresh-directory>
 ```
 

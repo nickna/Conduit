@@ -1,9 +1,5 @@
-using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
-
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Models;
-using ConduitLLM.Core.Serialization;
 
 using Microsoft.Extensions.Logging;
 
@@ -16,20 +12,6 @@ namespace ConduitLLM.Providers.Groq
     /// </summary>
     public partial class GroqClient
     {
-        // Capture the policy at first mapping, after construction/request configuration,
-        // while sharing only immutable metadata across subsequent frames and clients.
-        private static readonly Lazy<JsonTypeInfo<ChatCompletionChunk>> StreamingChunkTypeInfo =
-            new(CreateStreamingChunkTypeInfo, LazyThreadSafetyMode.ExecutionAndPublication);
-
-        private static JsonTypeInfo<ChatCompletionChunk> CreateStreamingChunkTypeInfo()
-        {
-            var context = new CoreHttpJsonContext(new JsonSerializerOptions(DefaultJsonOptions));
-            var typeInfo = context.ChatCompletionChunk;
-            typeInfo.Options.MakeReadOnly();
-            typeInfo.MakeReadOnly();
-            return typeInfo;
-        }
-
         /// <summary>
         /// Creates a chat completion with enhanced error handling specific to Groq.
         /// </summary>
@@ -80,7 +62,7 @@ namespace ConduitLLM.Providers.Groq
         {
             try
             {
-                return Streaming.GroqChunkConverter.ConvertWithMetadata(chunk, StreamingChunkTypeInfo.Value);
+                return Streaming.GroqChunkConverter.Convert(chunk, DefaultJsonOptions);
             }
             catch (Exception ex)
             {

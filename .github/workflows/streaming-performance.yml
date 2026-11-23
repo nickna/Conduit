@@ -7,6 +7,10 @@ on:
         description: 'Full candidate SHA, ancestor of the checked-out ref'
         required: true
         type: string
+      baseline_revision:
+        description: 'Full baseline SHA, ancestor of the checked-out ref'
+        required: true
+        type: string
   pull_request:
     branches: [master]
     paths:
@@ -53,10 +57,17 @@ jobs:
           - arch: Arm64
             runner: ubuntu-24.04-arm
             profile: micro-queue
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: control
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+            profile: control
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
       CANDIDATE_REVISION: ${{ inputs.candidate_revision || github.event.pull_request.head.sha }}
+      BASELINE_REVISION: ${{ inputs.baseline_revision || github.event.pull_request.base.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,13 +82,25 @@ jobs:
         shell: pwsh
         run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-input-integrity.json'
       - name: Run paired Gateway protocol and financial workloads
-        if: matrix.profile != 'micro-queue'
+        if: matrix.profile == 'main' || matrix.profile == 'pressure'
         shell: pwsh
         run: >-
           ./scripts/performance/phase3/run-paired-gateway.ps1
           -CandidateRevision $env:CANDIDATE_REVISION
+          -BaselineRevision $env:BASELINE_REVISION
           -Architecture '${{ matrix.arch }}'
           -Profile '${{ matrix.profile }}'
+          -OutputDirectory '${{ runner.temp }}/phase3-gateway'
+      - name: Measure variation with identical binaries
+        if: matrix.profile == 'control'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-paired-gateway.ps1
+          -CandidateRevision $env:BASELINE_REVISION
+          -BaselineRevision $env:BASELINE_REVISION
+          -SameRevisionControl
+          -Architecture '${{ matrix.arch }}'
+          -Profile main
           -OutputDirectory '${{ runner.temp }}/phase3-gateway'
       - name: Verify paired micro evidence rejection
         if: matrix.profile == 'micro-queue'
@@ -135,3 +158,26 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 30
+      - name: Check Gateway performance budgets
+        if: matrix.profile == 'main' || matrix.profile == 'pressure'
+        shell: pwsh
+        env:
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/phase3-gateway
+          MEASUREMENT_PROFILE: ${{ matrix.profile }}
+        run: |
+          $reports = @('summary.json')
+          if ($env:MEASUREMENT_PROFILE -eq 'main') { $reports += 'core-summary.json' }
+          $breaches = foreach ($name in $reports) {
+            $report = Get-Content -Raw -LiteralPath (Join-Path $env:EVIDENCE_DIRECTORY $name) | ConvertFrom-Json
+            if (!$report.collectionValidated -or !$report.allWorkloadsPassed -or !$report.comparisons.Count) {
+              throw "Incomplete performance evidence in $name"
+            }
+            foreach ($case in $report.comparisons) {
+              foreach ($metric in $case.metrics.PSObject.Properties) {
+                if ($metric.Value.status -eq 'outside-working-threshold') {
+                  "$($report.profile) / $($case.case) / $($metric.Name): $($metric.Value.medianPairedRatio)"
+                }
+              }
+            }
+          }
+          if ($breaches) { throw ("Performance budget exceeded:`n" + ($breaches -join "`n")) }

@@ -5,7 +5,8 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [Parameter(Mandatory)][ValidateSet('X64','Arm64')][string]$Architecture,
       [Parameter(Mandatory)][string]$OutputDirectory,
       [ValidateSet('main','pressure')][string]$Profile='main',
-      [ValidateRange(3,6)][int]$Runs=5)
+      [ValidateRange(3,6)][int]$Runs=5,
+      [switch]$SameRevisionControl)
 $ErrorActionPreference='Stop'
 if(!$IsLinux -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() -cne $Architecture){throw 'Require matching native Linux hardware'}
 $repository=(& git rev-parse --show-toplevel).Trim()
@@ -15,7 +16,9 @@ if($LASTEXITCODE -ne 0){throw 'Require a Git checkout'}
 if($LASTEXITCODE -ne 0){throw 'Candidate must be an ancestor of the qualification checkout'}
 & git merge-base --is-ancestor $BaselineRevision HEAD
 if($LASTEXITCODE -ne 0){throw 'Baseline must be an ancestor of the qualification checkout'}
-if($CandidateRevision -ceq $BaselineRevision){throw 'Require distinct before/after source revisions'}
+if(($CandidateRevision -ceq $BaselineRevision) -ne $SameRevisionControl.IsPresent){
+ throw 'Only the same-revision control can compare identical revisions'
+}
 if((Test-Path -LiteralPath $OutputDirectory) -and @(Get-ChildItem -LiteralPath $OutputDirectory -Force).Count){throw 'Use a fresh output directory; never overwrite previous qualification evidence'}
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $out=(Resolve-Path $OutputDirectory).Path
@@ -91,8 +94,13 @@ foreach($definition in $cohortDefinitions){
  Invoke-Checked 'git' @('archive','--format=tar',"--output=$archive",$definition.sha) "$out/$($definition.id)-archive.log"
  Invoke-Checked 'tar' @('-xf',$archive,'-C',$source) "$out/$($definition.id)-extract.log"
  $gateway=Join-Path $work "$($definition.id)-gateway";$migrator=Join-Path $work "$($definition.id)-migrator"
- Publish-Project $source 'Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj' $gateway "$out/$($definition.id)-gateway-build.log" $definition.sdk $definition.sha
- Publish-Project $source 'tools/ConduitLLM.Migrator/ConduitLLM.Migrator.csproj' $migrator "$out/$($definition.id)-migrator-build.log" $definition.sdk $definition.sha
+ if($SameRevisionControl -and $definition.id -ceq 'candidate'){
+  Copy-Item -Recurse -LiteralPath (Join-Path $work 'fixed-gateway') -Destination $gateway
+  Copy-Item -Recurse -LiteralPath (Join-Path $work 'fixed-migrator') -Destination $migrator
+ }else{
+  Publish-Project $source 'Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj' $gateway "$out/$($definition.id)-gateway-build.log" $definition.sdk $definition.sha
+  Publish-Project $source 'tools/ConduitLLM.Migrator/ConduitLLM.Migrator.csproj' $migrator "$out/$($definition.id)-migrator-build.log" $definition.sdk $definition.sha
+ }
  $sourceBindings.Add([ordered]@{id=$definition.id;sourceSha=$definition.sha;sourceSdk=$definition.sdk;sourceTree=(& git rev-parse "$($definition.sha)^{tree}").Trim();
   archiveSha256=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant();
   files=@(foreach($directory in @($gateway,$migrator)){
@@ -126,7 +134,7 @@ $sourceBindings.Add([ordered]@{id='fixed-tools';sourceSdk='10.0.404';files=@(
 $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindings.json" -Encoding utf8NoBOM
 $primaryCatalog=if($Profile -eq 'pressure'){Join-Path $qualificationRoot 'pressure-native-catalog.json'}else{Join-Path $qualificationRoot 'phase0-catalog.json'}
 $config=[ordered]@{schemaVersion=1;profile=$(if($Profile -eq 'pressure'){'pressure64'}else{'phase0'});diagnostic=$false;runs=$Runs;architecture=$Architecture;workingDirectory=$repository;infrastructurePrepared=$false;
- baselineRevision=$BaselineRevision;comparisons=@(@{baseline='fixed';candidate='candidate'});
+ baselineRevision=$BaselineRevision;sameRevisionControl=$SameRevisionControl.IsPresent;comparisons=@(@{baseline='fixed';candidate='candidate'});
  scope='Phase 3: two .NET11 SDK11.0.100/runtime11.0.0 native JIT sources on one runner. Fixed is the retained before source, not a .NET10 control. Phase2 fixture namespaces are reused solely to preserve unchanged read-only capture/drain contracts. No original dataset is modified.';
  clientDotnet=(Get-Command dotnet).Source;workload=(Join-Path $work "client/Conduit.Phase0.$clientProject.dll");
  provider=(Join-Path $work 'provider/Conduit.Qualification.ProviderV2.dll');providerObservationVersion=2;
@@ -249,7 +257,7 @@ foreach($definition in $cohortDefinitions){
 $inputDelta=Get-PublishedInputDelta
 $inputDelta|ConvertTo-Json -Depth 4|Set-Content "$out/published-input-integrity.json" -Encoding utf8NoBOM
 if(!$inputDelta.passed){throw 'Published input file set or content changed during qualification'}
-[ordered]@{schemaVersion=1;profile=$Profile;candidateRevision=$CandidateRevision;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;
+[ordered]@{schemaVersion=1;profile=$Profile;baselineRevision=$BaselineRevision;candidateRevision=$CandidateRevision;sameRevisionControl=$SameRevisionControl.IsPresent;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;
  primaryCollectionValidated=$summary.collectionValidated;coreCollectionValidated=$coreSummary.collectionValidated;coreAllWorkloadsPassed=$coreSummary.allWorkloadsPassed;
  allocationGateSatisfied=$false;allocationGateStatus=$summary.allocationGateStatus;
  financial=$financialResults.ToArray();performanceAcceptanceGranted=$false;productionRolloutPerformed=$false;
