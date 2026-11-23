@@ -41,8 +41,9 @@ The UTF-8 prototype is preserved in history, rather than active production code.
 The `Phase 3 streaming performance` workflow runs `main`, `pressure`,
 `micro-queue` and an identical-binary `control` separately on `ubuntu-24.04`
 x64 and `ubuntu-24.04-arm` ARM64.
-Each job has read-only repository permissions, no production secrets and a
-90-minute deadline. The control repeats the main workload with copies of the
+Each job has read-only repository permissions and no production secrets. The
+main and control profiles have a 120-minute deadline, and pressure and
+micro-queue have a 90-minute deadline. The control repeats the main workload with copies of the
 same published Gateway and migrator, separate databases and fresh processes.
 It measures variation and cannot satisfy the candidate comparison. The Gateway
 candidate jobs retain their artifacts before checking the existing budgets.
@@ -56,13 +57,15 @@ For Gateway qualification, run from a full checkout containing the candidate:
   -Profile main -OutputDirectory <fresh-directory>
 ```
 
-Repeat with `pressure` and on matching native ARM64 hardware. Five fresh-process
-repetitions alternate the before/after order on each runner. The unchanged
-versioned provider, client, observer, catalog, capture and reconciliation tools
-remain source-bound. Both sources must pass protocol and financial checks;
-neither has a historical Responses failure exception. Main also repeats seven
-ordinary protocol cases with 1,000 measured requests and 100 warmups per run.
-Low-count long-stream/pressure tails remain exploratory distributions.
+Repeat with `pressure` and on matching native ARM64 hardware. Main and control
+CI use six fresh-process pairs so each arm runs first three times. Pressure
+uses five pairs. The versioned provider, client, observer, capture and
+reconciliation tools remain source-bound. Both sources must pass protocol and
+financial checks. Main derives its catalog from the unchanged phase-0 fixture,
+retaining all case options and increasing sample counts and warmups for
+ordinary cases. It also runs seven ordinary protocol cases with 1,500 measured
+requests and 150 warmups per run. Low-count long-stream and pressure tails
+remain exploratory distributions.
 
 For compatibility with the unchanged capture guards, the isolated databases,
 resource labels and cohort IDs retain the `phase2` / `fixed` / `candidate` names.

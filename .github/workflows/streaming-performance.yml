@@ -34,7 +34,7 @@ jobs:
   matched:
     name: Phase 3 (${{ matrix.arch }}, ${{ matrix.profile }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: ${{ (matrix.profile == 'main' || matrix.profile == 'control') && 120 || 90 }}
     strategy:
       fail-fast: false
       matrix:
@@ -90,6 +90,7 @@ jobs:
           -BaselineRevision $env:BASELINE_REVISION
           -Architecture '${{ matrix.arch }}'
           -Profile '${{ matrix.profile }}'
+          -Runs ${{ matrix.profile == 'main' && 6 || 5 }}
           -OutputDirectory '${{ runner.temp }}/phase3-gateway'
       - name: Measure variation with identical binaries
         if: matrix.profile == 'control'
@@ -101,6 +102,7 @@ jobs:
           -SameRevisionControl
           -Architecture '${{ matrix.arch }}'
           -Profile main
+          -Runs 6
           -OutputDirectory '${{ runner.temp }}/phase3-gateway'
       - name: Verify paired micro evidence rejection
         if: matrix.profile == 'micro-queue'

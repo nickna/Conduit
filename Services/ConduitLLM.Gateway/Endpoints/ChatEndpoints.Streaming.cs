@@ -544,7 +544,7 @@ namespace ConduitLLM.Gateway.Endpoints
         }
 
         /// <summary>Records content-chunk timing and emits periodic metrics for enhanced SSE streams.</summary>
-        internal async Task EmitPeriodicMetrics(
+        internal Task EmitPeriodicMetrics(
             ChatCompletionChunk chunk,
             EnhancedSSEResponseWriter sseWriter,
             StreamingMetricsCollector metricsCollector,
@@ -554,7 +554,7 @@ namespace ConduitLLM.Gateway.Endpoints
             // timestamps and calculating a growing latency snapshot for discarded metrics.
             if (!sseWriter.EnhancedEventsEnabled)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             if (chunk?.Choices?.Count > 0)
@@ -575,9 +575,11 @@ namespace ConduitLLM.Gateway.Endpoints
                 if (metricsCollector.ShouldEmitMetrics())
                 {
                     _logger.LogDebug("Emitting streaming metrics");
-                    await sseWriter.WriteMetricsEventAsync(metricsCollector.GetMetrics(), cancellationToken);
+                    return sseWriter.WriteMetricsEventAsync(metricsCollector.GetMetrics(), cancellationToken);
                 }
             }
+
+            return Task.CompletedTask;
         }
 
         private async Task StoreStreamingResultsAsync(

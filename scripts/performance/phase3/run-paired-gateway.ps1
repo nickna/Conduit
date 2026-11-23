@@ -132,7 +132,31 @@ $sourceBindings.Add([ordered]@{id='fixed-tools';sourceSdk='10.0.404';files=@(
  }
 )})
 $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindings.json" -Encoding utf8NoBOM
-$primaryCatalog=if($Profile -eq 'pressure'){Join-Path $qualificationRoot 'pressure-native-catalog.json'}else{Join-Path $qualificationRoot 'phase0-catalog.json'}
+$primaryCatalog=Join-Path $qualificationRoot 'pressure-native-catalog.json'
+if($Profile -eq 'main'){
+ # Keep endpoints, payloads and concurrency identical to the frozen catalog.
+ # The short windows of the original fixture could breach working thresholds
+ # even when comparing identical binaries. Use longer warmups and more requests
+ # to reduce cold tiering and single-request leverage without relaxing budgets.
+ $catalogSource=Join-Path $qualificationRoot 'phase0-catalog.json'
+ $mainCatalog=Get-Content -Raw -LiteralPath $catalogSource|ConvertFrom-Json
+ $mainCatalog.repetitions=$Runs
+ $mainCatalog.warmupMethod='Separate warmup client invocation excluded from the measured window; extended counts for phase 3'
+ $mainCatalog | Add-Member -NotePropertyName phase3BaseCatalogSha256 -NotePropertyValue (Get-FileHash -LiteralPath $catalogSource).Hash.ToLowerInvariant()
+ foreach($case in $mainCatalog.cases){
+  # Paced and cancellation cases use their unchanged timing and sample counts.
+  if($case.slowReadDelayMilliseconds -or $case.cancel){continue}
+  if($case.requests -ge 100){
+   $case.requests=300
+   $case.warmupRequests=100
+  }else{
+   $case.requests*=3
+   $case.warmupRequests=[Math]::Max($case.warmupRequests*3, $case.concurrency)
+  }
+ }
+ $primaryCatalog=Join-Path $out 'main-catalog.json'
+ $mainCatalog|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $primaryCatalog -Encoding utf8NoBOM
+}
 $config=[ordered]@{schemaVersion=1;profile=$(if($Profile -eq 'pressure'){'pressure64'}else{'phase0'});diagnostic=$false;runs=$Runs;architecture=$Architecture;workingDirectory=$repository;infrastructurePrepared=$false;
  baselineRevision=$BaselineRevision;sameRevisionControl=$SameRevisionControl.IsPresent;comparisons=@(@{baseline='fixed';candidate='candidate'});
  scope='Phase 3: two .NET11 SDK11.0.100/runtime11.0.0 native JIT sources on one runner. Fixed is the retained before source, not a .NET10 control. Phase2 fixture namespaces are reused solely to preserve unchanged read-only capture/drain contracts. No original dataset is modified.';
@@ -167,9 +191,9 @@ try{
  $coreCases=@((Get-Content -Raw (Join-Path $qualificationRoot 'phase0-catalog.json')|ConvertFrom-Json).cases|Where-Object{
   $_.id -in 'chat-json','standard-short','enhanced-short','standard-tools','enhanced-tools','responses-json','responses-sse'
  })
- foreach($case in $coreCases){$case.requests=1000;$case.warmupRequests=100}
+ foreach($case in $coreCases){$case.requests=1500;$case.warmupRequests=150}
  $coreCatalog=Join-Path $out 'core-catalog.json'
- [ordered]@{schemaVersion=1;profile='core';scope='1000 measured requests and100 warmups per run; per-run quantiles, not pooled';cases=$coreCases}|ConvertTo-Json -Depth 8|Set-Content $coreCatalog -Encoding utf8NoBOM
+ [ordered]@{schemaVersion=1;profile='core';scope='1500 measured requests and 150 warmups per run; per-run quantiles, not pooled';cases=$coreCases}|ConvertTo-Json -Depth 8|Set-Content $coreCatalog -Encoding utf8NoBOM
  $coreConfig=[ordered]@{};foreach($key in $config.Keys){$coreConfig[$key]=$config[$key]}
  $coreConfig.profile='core';$coreConfig.catalog=$coreCatalog;$coreConfig.cohorts=$cohorts.ToArray()
  $coreConfig.initialLogCounts=[ordered]@{fixed=0;candidate=0}
