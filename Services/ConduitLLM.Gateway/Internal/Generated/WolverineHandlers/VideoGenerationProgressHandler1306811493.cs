@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var videoGenerationProgress = (ConduitLLM.Core.Events.VideoGenerationProgress)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.VideoGenerationProgress>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.VideoGenerationProgress>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.VideoGenerationProgress>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.VideoGenerationProgress>");
             var wolverineHandlerBridgeOfVideoGenerationProgress = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.VideoGenerationProgress>(eventHandlerOfVideoGenerationProgressIEnumerable, _loggerOfWolverineHandlerBridgeOfVideoGenerationProgress);
 
             // The actual message execution

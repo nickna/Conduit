@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var providerKeyReenabledEvent = (ConduitLLM.Configuration.Events.ProviderKeyReenabledEvent)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyReenabledEvent>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyReenabledEvent>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyReenabledEvent>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyReenabledEvent>");
             var wolverineHandlerBridgeOfProviderKeyReenabledEvent = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyReenabledEvent>(eventHandlerOfProviderKeyReenabledEventIEnumerable, _loggerOfWolverineHandlerBridgeOfProviderKeyReenabledEvent);
 
             // The actual message execution

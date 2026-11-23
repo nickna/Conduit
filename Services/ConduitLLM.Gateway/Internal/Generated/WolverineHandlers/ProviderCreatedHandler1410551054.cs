@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var providerCreated = (ConduitLLM.Core.Events.ProviderCreated)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.ProviderCreated>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.ProviderCreated>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.ProviderCreated>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.ProviderCreated>");
             var wolverineHandlerBridgeOfProviderCreated = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.ProviderCreated>(eventHandlerOfProviderCreatedIEnumerable, _loggerOfWolverineHandlerBridgeOfProviderCreated);
 
             // The actual message execution

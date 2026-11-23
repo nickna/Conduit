@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var globalSettingsReloadRequested = (ConduitLLM.Core.Events.GlobalSettingsReloadRequested)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GlobalSettingsReloadRequested>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GlobalSettingsReloadRequested>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GlobalSettingsReloadRequested>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GlobalSettingsReloadRequested>");
             var wolverineHandlerBridgeOfGlobalSettingsReloadRequested = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GlobalSettingsReloadRequested>(eventHandlerOfGlobalSettingsReloadRequestedIEnumerable, _loggerOfWolverineHandlerBridgeOfGlobalSettingsReloadRequested);
 
             // The actual message execution

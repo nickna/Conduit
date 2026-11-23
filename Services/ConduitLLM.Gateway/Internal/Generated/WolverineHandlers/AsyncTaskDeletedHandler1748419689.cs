@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var asyncTaskDeleted = (ConduitLLM.Core.Events.AsyncTaskDeleted)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.AsyncTaskDeleted>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.AsyncTaskDeleted>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.AsyncTaskDeleted>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.AsyncTaskDeleted>");
             var wolverineHandlerBridgeOfAsyncTaskDeleted = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.AsyncTaskDeleted>(eventHandlerOfAsyncTaskDeletedIEnumerable, _loggerOfWolverineHandlerBridgeOfAsyncTaskDeleted);
 
             // The actual message execution

@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var providerKeyDisabledEvent = (ConduitLLM.Configuration.Events.ProviderKeyDisabledEvent)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyDisabledEvent>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyDisabledEvent>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyDisabledEvent>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyDisabledEvent>");
             var wolverineHandlerBridgeOfProviderKeyDisabledEvent = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Configuration.Events.ProviderKeyDisabledEvent>(eventHandlerOfProviderKeyDisabledEventIEnumerable, _loggerOfWolverineHandlerBridgeOfProviderKeyDisabledEvent);
 
             // The actual message execution
