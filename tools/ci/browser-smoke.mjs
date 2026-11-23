@@ -27,7 +27,8 @@ export async function smoke({ start, admin, env, master, output, report }) {
   function token(adminRole = true) {
     const now = Math.floor(Date.now() / 1000);
     const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
-    const payload = `${encode({ alg: 'RS256', typ: 'JWT', kid: 'ci-isolated' })}.${encode({
+    // Clerk requires the session token category on locally signed test tokens.
+    const payload = `${encode({ alg: 'RS256', typ: 'JWT', kid: 'ci-isolated', cat: 'cl_B7d4PD111AAA' })}.${encode({
       iss: `https://${frontend}`, sub: 'user_ci', sid: 'sess_ci', azp: webadmin,
       iat: now, nbf: now - 10, exp: now + 600, metadata: { siteadmin: adminRole }
     })}`;
