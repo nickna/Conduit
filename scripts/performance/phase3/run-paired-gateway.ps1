@@ -191,9 +191,10 @@ try{
  $coreCases=@((Get-Content -Raw (Join-Path $qualificationRoot 'phase0-catalog.json')|ConvertFrom-Json).cases|Where-Object{
   $_.id -in 'chat-json','standard-short','enhanced-short','standard-tools','enhanced-tools','responses-json','responses-sse'
  })
- foreach($case in $coreCases){$case.requests=1500;$case.warmupRequests=150}
+ # The frozen Workload client accepts at most 1,000 requests per invocation.
+ foreach($case in $coreCases){$case.requests=1000;$case.warmupRequests=100}
  $coreCatalog=Join-Path $out 'core-catalog.json'
- [ordered]@{schemaVersion=1;profile='core';scope='1500 measured requests and 150 warmups per run; per-run quantiles, not pooled';cases=$coreCases}|ConvertTo-Json -Depth 8|Set-Content $coreCatalog -Encoding utf8NoBOM
+ [ordered]@{schemaVersion=1;profile='core';scope='1000 measured requests and 100 warmups per run; per-run quantiles, not pooled';cases=$coreCases}|ConvertTo-Json -Depth 8|Set-Content $coreCatalog -Encoding utf8NoBOM
  $coreConfig=[ordered]@{};foreach($key in $config.Keys){$coreConfig[$key]=$config[$key]}
  $coreConfig.profile='core';$coreConfig.catalog=$coreCatalog;$coreConfig.cohorts=$cohorts.ToArray()
  $coreConfig.initialLogCounts=[ordered]@{fixed=0;candidate=0}

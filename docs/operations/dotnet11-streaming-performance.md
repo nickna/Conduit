@@ -62,8 +62,8 @@ uses five pairs. The versioned provider, client, observer, capture and
 reconciliation tools remain source-bound. Both sources must pass protocol and
 financial checks. Main derives its catalog from the unchanged phase-0 fixture,
 retaining all case options and increasing sample counts and warmups for
-ordinary cases. It also runs seven ordinary protocol cases with 1,500 measured
-requests and 150 warmups per run. Low-count long-stream and pressure tails
+ordinary cases. It also runs seven ordinary protocol cases with 1,000 measured
+requests and 100 warmups per run. Low-count long-stream and pressure tails
 remain exploratory distributions.
 
 For compatibility with the unchanged capture guards, the isolated databases,
