@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var indeterminateMediaTaskRetryRequested = (ConduitLLM.Core.Events.IndeterminateMediaTaskRetryRequested)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.IndeterminateMediaTaskRetryRequested>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.IndeterminateMediaTaskRetryRequested>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.IndeterminateMediaTaskRetryRequested>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.IndeterminateMediaTaskRetryRequested>");
             var wolverineHandlerBridgeOfIndeterminateMediaTaskRetryRequested = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.IndeterminateMediaTaskRetryRequested>(eventHandlerOfIndeterminateMediaTaskRetryRequestedIEnumerable, _loggerOfWolverineHandlerBridgeOfIndeterminateMediaTaskRetryRequested);
 
             // The actual message execution

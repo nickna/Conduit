@@ -27,8 +27,8 @@ namespace Internal.Generated.WolverineHandlers
             // The actual message body
             var mediaCleanupAlertRaised = (ConduitLLM.Core.Events.MediaCleanupAlertRaised)context.Envelope.Message;
 
-            System.Diagnostics.Activity.Current?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.MediaCleanupAlertRaised>");
-            System.Diagnostics.Activity.Current?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.MediaCleanupAlertRaised>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("message.handler", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.MediaCleanupAlertRaised>");
+            Wolverine.Runtime.WolverineTracing.MessageActivity(context.Envelope)?.SetTag("handler.type", "ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.MediaCleanupAlertRaised>");
             var wolverineHandlerBridgeOfMediaCleanupAlertRaised = new ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.MediaCleanupAlertRaised>(eventHandlerOfMediaCleanupAlertRaisedIEnumerable, _loggerOfWolverineHandlerBridgeOfMediaCleanupAlertRaised);
 
             // The actual message execution
