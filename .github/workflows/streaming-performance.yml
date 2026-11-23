@@ -34,7 +34,7 @@ jobs:
   matched:
     name: Phase 3 (${{ matrix.arch }}, ${{ matrix.profile }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ (matrix.profile == 'main' || matrix.profile == 'control') && 120 || 90 }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:

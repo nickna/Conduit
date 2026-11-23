@@ -41,9 +41,8 @@ The UTF-8 prototype is preserved in history, rather than active production code.
 The `Phase 3 streaming performance` workflow runs `main`, `pressure`,
 `micro-queue` and an identical-binary `control` separately on `ubuntu-24.04`
 x64 and `ubuntu-24.04-arm` ARM64.
-Each job has read-only repository permissions and no production secrets. The
-main and control profiles have a 120-minute deadline, and pressure and
-micro-queue have a 90-minute deadline. The control repeats the main workload with copies of the
+Each job has read-only repository permissions, no production secrets and a
+90-minute deadline. The control repeats the main workload with copies of the
 same published Gateway and migrator, separate databases and fresh processes.
 It measures variation and cannot satisfy the candidate comparison. The Gateway
 candidate jobs retain their artifacts before checking the existing budgets.
