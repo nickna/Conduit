@@ -212,7 +212,7 @@ if($Profile -eq 'main'){
  $mainCatalog|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $primaryCatalog -Encoding utf8NoBOM
 }
 $config=[ordered]@{schemaVersion=1;profile=$(if($Profile -eq 'pressure'){'pressure64'}else{'phase0'});diagnostic=$false;runs=$Runs;architecture=$Architecture;workingDirectory=$repository;infrastructurePrepared=$false;
- baselineRevision=$BaselineRevision;sameRevisionControl=$SameRevisionControl.IsPresent;comparisons=@(@{baseline='fixed';candidate='candidate'});
+ baselineRevision=$BaselineRevision;sameRevisionControl=$SameRevisionControl.IsPresent;requireStreamQuiescence=$true;comparisons=@(@{baseline='fixed';candidate='candidate'});
  scope='Phase 3: two .NET11 SDK11.0.100/runtime11.0.0 native JIT sources on one runner. Fixed is the retained before source, not a .NET10 control. Phase2 fixture namespaces are reused solely to preserve unchanged read-only capture/drain contracts. No original dataset is modified.';
  clientDotnet=(Get-Command dotnet).Source;workload=(Join-Path $work "client/Conduit.Phase0.$clientProject.dll");
  provider=(Join-Path $work 'provider/Conduit.Qualification.ProviderV2.dll');providerObservationVersion=2;
