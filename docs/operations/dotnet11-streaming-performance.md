@@ -40,12 +40,34 @@ The UTF-8 prototype is preserved in history, rather than active production code.
 
 The `Phase 3 streaming performance` workflow runs `main`, `pressure`,
 `micro-queue` and an identical-binary `control` separately on `ubuntu-24.04`
-x64 and `ubuntu-24.04-arm` ARM64.
+x64 and `ubuntu-24.04-arm` ARM64. The x64 matrix also has an
+`isolated-standard` job for the 100-, 1,000-, and 10,000-chunk standard SSE
+budgets. The x64 main job runs the other workloads and the expanded core
+profile. ARM64 still runs the original matrix.
 Each job has read-only repository permissions, no production secrets and a
 90-minute deadline. The control repeats the main workload with copies of the
 same published Gateway and migrator, separate databases and fresh processes.
 It measures variation and cannot satisfy the candidate comparison. The Gateway
 candidate jobs retain their artifacts before checking the existing budgets.
+
+The mixed x64 suite put the standard workloads at different positions across
+repetitions. In the byte-identical control, the baseline's 10,000-chunk CPU
+varied from 167 to 874 ms per validated response. The
+[isolated native experiment](https://github.com/nickna/Conduit/actions/runs/45554344845)
+gave each workload its own fixture and each arm a fresh Gateway process per
+repetition. Six orders balance the before, identical-binary, and candidate
+arms across positions on the same runner. Candidate CPU ratios were 0.986,
+0.988 and 0.944. The identical-binary ratios were 0.978, 0.976 and 1.045.
+The [raw evidence](https://github.com/nickna/Conduit/actions/runs/45554344845/artifacts/14997461747)
+includes the historical comparison's exact candidate and baseline revisions.
+
+The isolated job checks the same candidate thresholds with 240, 120 and 60
+measured requests per repetition, with separate warmups. The frozen workload,
+payload and concurrency are preserved. The identical-binary CPU median must
+fall between the existing CPU threshold and its reciprocal for the isolated
+comparison to qualify. Each of the three seeded arms must pass the strict
+SSE client and financial reconciliation. The mixed control remains available
+for comparison with earlier runs.
 
 For Gateway qualification, run from a full checkout containing the candidate:
 

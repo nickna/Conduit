@@ -47,6 +47,9 @@ jobs:
             profile: main
           - arch: X64
             runner: ubuntu-24.04
+            profile: isolated-standard
+          - arch: X64
+            runner: ubuntu-24.04
             profile: pressure
           - arch: Arm64
             runner: ubuntu-24.04-arm
@@ -91,7 +94,20 @@ jobs:
           -Architecture '${{ matrix.arch }}'
           -Profile '${{ matrix.profile }}'
           -Runs ${{ matrix.profile == 'main' && 6 || 5 }}
+          -ExcludeIsolatedStandardCases:('${{ matrix.arch }}' -ceq 'X64' -and '${{ matrix.profile }}' -ceq 'main')
           -OutputDirectory '${{ runner.temp }}/phase3-gateway'
+      - name: Measure isolated standard SSE with a byte-identical control
+        if: matrix.profile == 'isolated-standard'
+        shell: pwsh
+        env:
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/phase3-gateway
+        run: |
+          foreach ($chunks in 100, 1000, 10000) {
+            $output = Join-Path $env:EVIDENCE_DIRECTORY "standard-$chunks"
+            ./scripts/performance/phase3/run-paired-gateway.ps1 -CandidateRevision $env:CANDIDATE_REVISION `
+              -BaselineRevision $env:BASELINE_REVISION -Architecture X64 -Runs 6 `
+              -IsolatedStandardChunks $chunks -OutputDirectory $output
+          }
       - name: Measure variation with identical binaries
         if: matrix.profile == 'control'
         shell: pwsh
@@ -157,24 +173,56 @@ jobs:
             !${{ runner.temp }}/phase3-gateway/work/fixed/**
             !${{ runner.temp }}/phase3-gateway/work/candidate/**
             !${{ runner.temp }}/phase3-gateway/work/seed-source/**
+            !${{ runner.temp }}/phase3-gateway/*/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/*/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/*/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/*/work/seed-source/**
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 30
       - name: Check Gateway performance budgets
-        if: matrix.profile == 'main' || matrix.profile == 'pressure'
+        if: matrix.profile == 'main' || matrix.profile == 'pressure' || matrix.profile == 'isolated-standard'
         shell: pwsh
         env:
           EVIDENCE_DIRECTORY: ${{ runner.temp }}/phase3-gateway
           MEASUREMENT_PROFILE: ${{ matrix.profile }}
         run: |
+          $isolatedCases = @('standard-100', 'standard-1000', 'standard-10000')
           $reports = @('summary.json')
           if ($env:MEASUREMENT_PROFILE -eq 'main') { $reports += 'core-summary.json' }
+          $isolated = $env:MEASUREMENT_PROFILE -eq 'isolated-standard'
+          if ($isolated) {
+            $reports = @($isolatedCases | ForEach-Object { "$_/summary.json" })
+          }
           $breaches = foreach ($name in $reports) {
             $report = Get-Content -Raw -LiteralPath (Join-Path $env:EVIDENCE_DIRECTORY $name) | ConvertFrom-Json
             if (!$report.collectionValidated -or !$report.allWorkloadsPassed -or !$report.comparisons.Count) {
               throw "Incomplete performance evidence in $name"
             }
-            foreach ($case in $report.comparisons) {
+            $comparisons = $report.comparisons
+            if ($isolated) {
+              $workload = Split-Path -Parent $name
+              $control = @($comparisons | Where-Object candidate -ceq 'legacy')
+              $comparisons = @($comparisons | Where-Object candidate -ceq 'candidate')
+              if ($report.comparisons.Count -ne 2 -or $control.Count -ne 1 -or $comparisons.Count -ne 1 -or
+                  $control[0].case -cne $workload -or $comparisons[0].case -cne $workload -or
+                  $control[0].baseline -cne 'fixed' -or $comparisons[0].baseline -cne 'fixed') {
+                throw "Missing candidate or identical-binary comparison for $workload"
+              }
+              $controlCpu = $control[0].metrics.serverWindowCpuMillisecondsPerValidated
+              $candidateCpu = $comparisons[0].metrics.serverWindowCpuMillisecondsPerValidated
+              if ($controlCpu.pairs -ne 6 -or $candidateCpu.pairs -ne 6 -or
+                  $controlCpu.workingThreshold -le 1 -or $controlCpu.medianPairedRatio -le 0 -or
+                  $candidateCpu.status -notin @('within-working-threshold', 'outside-working-threshold')) {
+                throw "Missing paired CPU evidence for $workload"
+              }
+              Write-Host "$workload CPU ratios: candidate=$($candidateCpu.medianPairedRatio) control=$($controlCpu.medianPairedRatio)"
+              if ($controlCpu.medianPairedRatio -gt $controlCpu.workingThreshold -or
+                  $controlCpu.medianPairedRatio -lt (1 / $controlCpu.workingThreshold)) {
+                "$workload / identical-binary CPU control is outside the repeatability bound: $($controlCpu.medianPairedRatio)"
+              }
+            }
+            foreach ($case in $comparisons) {
               foreach ($metric in $case.metrics.PSObject.Properties) {
                 if ($metric.Value.status -eq 'outside-working-threshold') {
                   "$($report.profile) / $($case.case) / $($metric.Name): $($metric.Value.medianPairedRatio)"
@@ -182,4 +230,4 @@ jobs:
               }
             }
           }
-          if ($breaches) { throw ("Performance budget exceeded:`n" + ($breaches -join "`n")) }
+          if ($breaches) { throw ("Performance budget or control check failed:`n" + ($breaches -join "`n")) }

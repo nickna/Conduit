@@ -6,8 +6,19 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [Parameter(Mandatory)][string]$OutputDirectory,
       [ValidateSet('main','pressure')][string]$Profile='main',
       [ValidateRange(3,6)][int]$Runs=5,
-      [switch]$SameRevisionControl)
+      [switch]$SameRevisionControl,
+      [ValidateSet(0,100,1000,10000)][int]$IsolatedStandardChunks=0,
+      [switch]$ExcludeIsolatedStandardCases)
 $ErrorActionPreference='Stop'
+$isolatedStandard = $IsolatedStandardChunks -ne 0
+$standardCases = @('standard-100', 'standard-1000', 'standard-10000')
+if ($ExcludeIsolatedStandardCases -and ($Architecture -ne 'X64' -or $Profile -ne 'main' -or
+ $isolatedStandard -or $SameRevisionControl)) {
+ throw 'Only the amd64 main candidate can exclude cases covered by its isolated performance job'
+}
+if ($isolatedStandard -and ($Profile -ne 'main' -or $Runs -ne 6 -or $SameRevisionControl)) {
+ throw 'An isolated standard SSE case requires six three-cohort repetitions'
+}
 if(!$IsLinux -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() -cne $Architecture){throw 'Require matching native Linux hardware'}
 $repository=(& git rev-parse --show-toplevel).Trim()
 $qualificationRoot=Join-Path $repository 'scripts/qualification'
@@ -41,6 +52,13 @@ $containers=[Collections.Generic.List[string]]::new();$failure=$null;$prepared=$
 $cohortDefinitions=@(
  @{id='fixed';sha=$BaselineRevision;sdk='11.0.100';runtime='11.0.0';db=3;known=$false},
  @{id='candidate';sha=$CandidateRevision;sdk='11.0.100';runtime='11.0.0';db=4;known=$false})
+if ($isolatedStandard) {
+ # The capture tool reserves these three database names. Here legacy is a
+ # byte-identical copy of the .NET 11 fixed arm, with its own fixture state.
+ $cohortDefinitions = @($cohortDefinitions[0],
+  @{id='legacy';sha=$BaselineRevision;sdk='11.0.100';runtime='11.0.0';db=2;known=$false},
+  $cohortDefinitions[1])
+}
 $sourceBindings=[Collections.Generic.List[object]]::new();$cohorts=[Collections.Generic.List[object]]::new()
 function Invoke-Checked([string]$Program,[string[]]$Arguments,[string]$Log){
  & $Program @Arguments *> $Log
@@ -94,7 +112,7 @@ foreach($definition in $cohortDefinitions){
  Invoke-Checked 'git' @('archive','--format=tar',"--output=$archive",$definition.sha) "$out/$($definition.id)-archive.log"
  Invoke-Checked 'tar' @('-xf',$archive,'-C',$source) "$out/$($definition.id)-extract.log"
  $gateway=Join-Path $work "$($definition.id)-gateway";$migrator=Join-Path $work "$($definition.id)-migrator"
- if($SameRevisionControl -and $definition.id -ceq 'candidate'){
+ if (($SameRevisionControl -or $isolatedStandard) -and $definition.id -cne 'fixed' -and $definition.sha -ceq $BaselineRevision) {
   Copy-Item -Recurse -LiteralPath (Join-Path $work 'fixed-gateway') -Destination $gateway
   Copy-Item -Recurse -LiteralPath (Join-Path $work 'fixed-migrator') -Destination $migrator
  }else{
@@ -114,6 +132,17 @@ foreach($definition in $cohortDefinitions){
   redisUrl="redis://127.0.0.1:16476/$($definition.db)";knownResponsesFailure=$definition.known})
 }
 $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindings.json" -Encoding utf8NoBOM
+if ($isolatedStandard) {
+ $referenceFiles = @($sourceBindings[0].files | ForEach-Object {
+  $_.path.Substring('fixed'.Length) + ':' + $_.bytes + ':' + $_.sha256
+ })
+ $controlFiles = @($sourceBindings[1].files | ForEach-Object {
+  $_.path.Substring('legacy'.Length) + ':' + $_.bytes + ':' + $_.sha256
+ })
+ if (Compare-Object $referenceFiles $controlFiles -CaseSensitive) {
+  throw 'The isolated control differs from the published baseline'
+ }
+}
 $seedSource=Join-Path $work 'seed-source';New-Item -ItemType Directory -Path $seedSource|Out-Null
 $seedArchive=Join-Path $work 'seed-source.tar'
 Invoke-Checked 'git' @('archive','--format=tar',"--output=$seedArchive",'f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa') "$out/seed-archive.log"
@@ -154,6 +183,22 @@ if($Profile -eq 'main'){
    $case.warmupRequests=[Math]::Max($case.warmupRequests*3, $case.concurrency)
   }
  }
+ if ($isolatedStandard) {
+  $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -ceq "standard-$IsolatedStandardChunks")
+  if ($mainCatalog.cases.Count -ne 1) { throw 'Expected one frozen standard SSE workload' }
+  $sampleCounts = @{
+   100 = @{requests=240;warmups=40}
+   1000 = @{requests=120;warmups=24}
+   10000 = @{requests=60;warmups=12}
+  }[$IsolatedStandardChunks]
+  $mainCatalog.cases[0].requests = $sampleCounts.requests
+  $mainCatalog.cases[0].warmupRequests = $sampleCounts.warmups
+ }
+ if ($ExcludeIsolatedStandardCases) {
+  $covered = @($mainCatalog.cases | Where-Object id -cin $standardCases)
+  if ($covered.Count -ne $standardCases.Count) { throw 'The isolated standard workload inventory changed' }
+  $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -cnotin $standardCases)
+ }
  $primaryCatalog=Join-Path $out 'main-catalog.json'
  $mainCatalog|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $primaryCatalog -Encoding utf8NoBOM
 }
@@ -163,6 +208,11 @@ $config=[ordered]@{schemaVersion=1;profile=$(if($Profile -eq 'pressure'){'pressu
  clientDotnet=(Get-Command dotnet).Source;workload=(Join-Path $work "client/Conduit.Phase0.$clientProject.dll");
  provider=(Join-Path $work 'provider/Conduit.Qualification.ProviderV2.dll');providerObservationVersion=2;
  observer=(Join-Path $work 'observer/Conduit.ServerObserver.dll');drainProbe=(Join-Path $work 'drain/DrainProbe.dll');catalog=$primaryCatalog;cohorts=$cohorts.ToArray()}
+if ($isolatedStandard) {
+ $config.profile = 'sse-isol'
+ $config.scope = 'One standard SSE workload with a fresh Gateway per arm and repetition. Three matched .NET 11 arms with independent seeded databases. The legacy arm copies the baseline binaries.'
+ $config.comparisons += @{baseline='fixed';candidate='legacy'}
+}
 $configPath=Join-Path $out 'configuration.json';$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
 $before=Invoke-Docker @('ps','-aq');$before|Set-Content "$out/outside-containers-before.txt" -Encoding utf8NoBOM
 try{
@@ -175,16 +225,16 @@ try{
   'redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952'));$containers.Add($redis)
  $deadline=[DateTime]::UtcNow.AddSeconds(60)
  while($true){& docker exec $pg pg_isready -h 127.0.0.1 -U phase2 -d phase2_fixed *> $null;if($LASTEXITCODE -eq 0){break};if([DateTime]::UtcNow -gt $deadline){throw 'PostgreSQL readiness failed'};Start-Sleep -Milliseconds 500}
- foreach($database in @('phase2_candidate')){[void](Invoke-Docker @('exec',$pg,'createdb','-U','phase2',$database))}
+ foreach($database in @($cohortDefinitions | Where-Object id -cne 'fixed' | ForEach-Object { "phase2_$($_.id)" })){[void](Invoke-Docker @('exec',$pg,'createdb','-U','phase2',$database))}
  Invoke-Docker (@('inspect')+$containers.ToArray())|Set-Content "$out/infrastructure.json" -Encoding utf8NoBOM
  & (Join-Path $qualificationRoot 'run-matched.ps1') -ConfigurationPath $configPath -OutputDirectory (Join-Path $out 'prepare') -Stage prepare
- foreach($database in @('phase2_fixed','phase2_candidate')){
+ foreach($database in @($cohortDefinitions | ForEach-Object { "phase2_$($_.id)" })){
   Get-Content -Raw (Join-Path $qualificationRoot 'fixture-controls.sql')|& docker exec -i $pg psql -X -v ON_ERROR_STOP=1 -U phase2 -d $database *> "$out/$database-controls.log"
   if($LASTEXITCODE -ne 0){throw 'Fixture controls failed'}
  }
  $config.infrastructurePrepared=$true;$prepared=$true;$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
  & (Join-Path $qualificationRoot 'run-matched.ps1') -ConfigurationPath $configPath -OutputDirectory (Join-Path $out 'measure') -Stage measure
- if($Profile -eq 'main'){
+ if ($Profile -eq 'main' -and !$isolatedStandard) {
  # Expand ordinary protocol workloads before evaluating p99 point estimates.
  # Long streams, pressure, cancellation and paced readers remain separately
  # labelled diagnostic distributions; no small sample becomes a release p99 SLO.
@@ -248,7 +298,7 @@ Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--direc
  '--configuration',$configPath,'--catalog',(Join-Path $out 'measure/catalog.source.json'),'--output',(Join-Path $out 'summary.json')) "$out/summarize.log"
 $summary=Get-Content -Raw "$out/summary.json"|ConvertFrom-Json
 $coreSummary=$null
-if($Profile -eq 'main'){
+if ($Profile -eq 'main' -and !$isolatedStandard) {
  Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--directory',(Join-Path $out 'core-measure'),
   '--configuration',$coreConfigPath,'--catalog',(Join-Path $out 'core-measure/catalog.source.json'),'--output',(Join-Path $out 'core-summary.json')) "$out/core-summarize.log"
  $coreSummary=Get-Content -Raw "$out/core-summary.json"|ConvertFrom-Json
@@ -261,7 +311,7 @@ if($legacyFailures.Count -ne $expectedLegacyFailures -or @($summary.runs|Where-O
 $financialResults=[Collections.Generic.List[object]]::new()
 foreach($definition in $cohortDefinitions){
  $directories=@((Join-Path $out 'measure'))
- if($Profile -eq 'main'){$directories+=(Join-Path $out 'core-measure')}
+ if ($Profile -eq 'main' -and !$isolatedStandard) {$directories+=(Join-Path $out 'core-measure')}
  $expectation=[ordered]@{schemaVersion=1;cohort=$definition.id;postgresDatabase="phase2_$($definition.id)";redisDatabase=$definition.db;
   seedBalance='100.00000000';seedSpent='0.00000000';seedCredits='100.00000000';chatCost='0.00007500';audioCost='0.00125000';
   beforeUsageCancellationState='settled-bounded-estimate';knownResponsesFailure=$definition.known;sourceSha=$definition.sha;
@@ -282,7 +332,7 @@ foreach($definition in $cohortDefinitions){
 $inputDelta=Get-PublishedInputDelta
 $inputDelta|ConvertTo-Json -Depth 4|Set-Content "$out/published-input-integrity.json" -Encoding utf8NoBOM
 if(!$inputDelta.passed){throw 'Published input file set or content changed during qualification'}
-[ordered]@{schemaVersion=1;profile=$Profile;baselineRevision=$BaselineRevision;candidateRevision=$CandidateRevision;sameRevisionControl=$SameRevisionControl.IsPresent;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;
+[ordered]@{schemaVersion=1;profile=$Profile;isolatedStandardChunks=$IsolatedStandardChunks;baselineRevision=$BaselineRevision;candidateRevision=$CandidateRevision;sameRevisionControl=$SameRevisionControl.IsPresent;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;
  primaryCollectionValidated=$summary.collectionValidated;coreCollectionValidated=$coreSummary.collectionValidated;coreAllWorkloadsPassed=$coreSummary.allWorkloadsPassed;
  allocationGateSatisfied=$false;allocationGateStatus=$summary.allocationGateStatus;
  financial=$financialResults.ToArray();performanceAcceptanceGranted=$false;productionRolloutPerformed=$false;
