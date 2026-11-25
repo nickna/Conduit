@@ -1,0 +1,80 @@
+name: Isolated mixed-workload diagnostics
+
+on:
+  push:
+    branches: [codex/pr1778-mixed-diagnostics]
+
+permissions:
+  contents: read
+
+jobs:
+  isolated:
+    name: Isolated candidate and identical-binary control (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: X64
+            runner: ubuntu-24.04
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+    timeout-minutes: 90
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      BASELINE_REVISION: '96ffd94da1286becc60404858c948824235bea93'
+      CANDIDATE_REVISION: '58098e3c2a28159feaa9809e8f3132b25d125fbe'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify frozen fixture bytes
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-isolated/frozen-inputs.json'
+      - name: Measure the two cases on the same runner
+        shell: pwsh
+        env:
+          EVIDENCE_ROOT: ${{ runner.temp }}/phase3-isolated
+        run: |
+          $arch = '${{ matrix.arch }}'
+          $cases = if ($arch -eq 'X64') { @('audio-1MiB-c1', 'responses-sse') } else { @('audio-1MiB-c1', 'standard-1000') }
+          foreach ($caseName in $cases) {
+            $output = Join-Path $env:EVIDENCE_ROOT $caseName
+            $arguments = @{
+              CandidateRevision = $env:CANDIDATE_REVISION
+              BaselineRevision = $env:BASELINE_REVISION
+              Architecture = $arch
+              Runs = 6
+              OutputDirectory = $output
+            }
+            if ($caseName -eq 'standard-1000') { $arguments.IsolatedStandardChunks = 1000 }
+            else { $arguments.DiagnosticWorkload = $caseName }
+            ./scripts/performance/phase3/run-paired-gateway.ps1 @arguments
+            $report = Get-Content -Raw -LiteralPath (Join-Path $output 'summary.json') | ConvertFrom-Json
+            foreach ($comparison in $report.comparisons) {
+              $cpu = $comparison.metrics.serverWindowCpuMillisecondsPerValidated
+              $p95 = $comparison.metrics.p95Milliseconds
+              Write-Output "$caseName $($comparison.candidate) median CPU $($cpu.medianPairedRatio) and p95 $($p95.medianPairedRatio)"
+            }
+          }
+      - name: Retain isolated evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-${{ matrix.arch }}-isolated-mixed
+          path: |
+            ${{ runner.temp }}/phase3-isolated
+            !${{ runner.temp }}/phase3-isolated/*/work/fixed/**
+            !${{ runner.temp }}/phase3-isolated/*/work/candidate/**
+            !${{ runner.temp }}/phase3-isolated/*/work/legacy/**
+            !${{ runner.temp }}/phase3-isolated/*/work/seed-source/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

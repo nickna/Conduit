@@ -8,9 +8,11 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [ValidateRange(3,6)][int]$Runs=5,
       [switch]$SameRevisionControl,
       [ValidateSet(0,100,1000,10000)][int]$IsolatedStandardChunks=0,
-      [switch]$ExcludeIsolatedStandardCases)
+      [switch]$ExcludeIsolatedStandardCases,
+      [ValidateSet('responses-sse','audio-1MiB-c1')][string]$DiagnosticWorkload)
 $ErrorActionPreference='Stop'
-$isolatedStandard = $IsolatedStandardChunks -ne 0
+if ($DiagnosticWorkload -and $IsolatedStandardChunks) { throw 'Choose one isolated workload' }
+$isolatedStandard = $IsolatedStandardChunks -ne 0 -or $DiagnosticWorkload
 $standardCases = @('standard-100', 'standard-1000', 'standard-10000')
 if ($ExcludeIsolatedStandardCases -and ($Architecture -ne 'X64' -or $Profile -ne 'main' -or
  $isolatedStandard -or $SameRevisionControl)) {
@@ -184,13 +186,20 @@ if($Profile -eq 'main'){
   }
  }
  if ($isolatedStandard) {
-  $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -ceq "standard-$IsolatedStandardChunks")
+  $caseId = if ($DiagnosticWorkload) { $DiagnosticWorkload } else { "standard-$IsolatedStandardChunks" }
+  $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -ceq $caseId)
   if ($mainCatalog.cases.Count -ne 1) { throw 'Expected one frozen standard SSE workload' }
   $sampleCounts = @{
    100 = @{requests=240;warmups=40}
    1000 = @{requests=120;warmups=24}
    10000 = @{requests=60;warmups=12}
   }[$IsolatedStandardChunks]
+  if ($DiagnosticWorkload) {
+   $sampleCounts = @{
+    'responses-sse' = @{requests=600;warmups=100}
+    'audio-1MiB-c1' = @{requests=240;warmups=40}
+   }[$DiagnosticWorkload]
+  }
   $mainCatalog.cases[0].requests = $sampleCounts.requests
   $mainCatalog.cases[0].warmupRequests = $sampleCounts.warmups
  }
@@ -210,7 +219,7 @@ $config=[ordered]@{schemaVersion=1;profile=$(if($Profile -eq 'pressure'){'pressu
  observer=(Join-Path $work 'observer/Conduit.ServerObserver.dll');drainProbe=(Join-Path $work 'drain/DrainProbe.dll');catalog=$primaryCatalog;cohorts=$cohorts.ToArray()}
 if ($isolatedStandard) {
  $config.profile = 'sse-isol'
- $config.scope = 'One standard SSE workload with a fresh Gateway per arm and repetition. Three matched .NET 11 arms with independent seeded databases. The legacy arm copies the baseline binaries.'
+ $config.scope = 'One isolated workload with a fresh Gateway per arm and repetition. Three matched .NET 11 arms with independent seeded databases. The legacy arm copies the baseline binaries.'
  $config.comparisons += @{baseline='fixed';candidate='legacy'}
 }
 $configPath=Join-Path $out 'configuration.json';$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
