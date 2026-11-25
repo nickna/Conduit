@@ -88,9 +88,38 @@ function Read-Json([string]$url,[string]$path,[bool]$post=$false){
  try{$response=$http.SendAsync($message).GetAwaiter().GetResult();$value=$response.Content.ReadAsStringAsync().GetAwaiter().GetResult();if(!$response.IsSuccessStatusCode){throw "HTTP $([int]$response.StatusCode): $value"};$value|Set-Content $path -Encoding utf8NoBOM;return ($value|ConvertFrom-Json)}finally{$message.Dispose();if($response){$response.Dispose()}}
 }
 function Save-Metrics([string]$path){
- $message=[Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get,'http://127.0.0.1:18080/metrics');$response=$null
- [void]$message.Headers.TryAddWithoutValidation('Authorization','Bearer condt_native_aot_parity')
- try{$response=$http.SendAsync($message).GetAwaiter().GetResult();$body=$response.Content.ReadAsStringAsync().GetAwaiter().GetResult();if(!$response.IsSuccessStatusCode){throw "Metrics HTTP $([int]$response.StatusCode)"};$body|Set-Content $path -Encoding utf8NoBOM}finally{$message.Dispose();if($response){$response.Dispose()}}
+ $clock=[Diagnostics.Stopwatch]::StartNew()
+ $recordedActiveScrape=$false
+ while($true){
+  $message=[Net.Http.HttpRequestMessage]::new('GET','http://127.0.0.1:18080/metrics')
+  $response=$null
+  [void]$message.Headers.TryAddWithoutValidation('Authorization','Bearer condt_native_aot_parity')
+  try{
+   $response=$http.SendAsync($message).GetAwaiter().GetResult()
+   $body=$response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+   if(!$response.IsSuccessStatusCode){throw "Metrics HTTP $([int]$response.StatusCode)"}
+  }finally{
+   $message.Dispose()
+   if($response){$response.Dispose()}
+  }
+  $body|Set-Content -LiteralPath $path -Encoding utf8NoBOM
+  if(!$configuration.requireStreamQuiescence){return}
+
+  # The client can finish a cancellation before Gateway accounting and terminal
+  # metrics finish. Wait outside the measured window in this owned fixture.
+  $activeSamples=[regex]::Matches($body,'(?m)^conduitllm_gateway_streaming_conduit_streams_active ([^\s]+)(?: [^\r\n]+)?\r?$')
+  if($activeSamples.Count -eq 0){return} # The gauge is absent before the first stream.
+  if($activeSamples.Count -ne 1){throw "Duplicate active-stream gauge samples in $path"}
+  $active=[decimal]::Parse($activeSamples[0].Groups[1].Value,[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture)
+  if($active -eq 0){return}
+  if($active -lt 0 -or [decimal]::Truncate($active) -ne $active){throw "Invalid active-stream gauge in $path"}
+  if(!$recordedActiveScrape){
+   $body|Set-Content -LiteralPath "$path.active" -Encoding utf8NoBOM
+   $recordedActiveScrape=$true
+  }
+  if($clock.Elapsed.TotalSeconds -ge 30){throw "Gateway streams did not finish before metrics capture in $path"}
+  Start-Sleep -Milliseconds 100
+ }
 }
 function Await-Ready([string]$url,$owned,[int]$timeout){
  $clock=[Diagnostics.Stopwatch]::StartNew()

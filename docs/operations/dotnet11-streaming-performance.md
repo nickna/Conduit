@@ -69,6 +69,16 @@ comparison to qualify. Each of the three seeded arms must pass the strict
 SSE client and financial reconciliation. The mixed control remains available
 for comparison with earlier runs.
 
+Phase 3 waits for the Gateway's active streams gauge to reach zero before
+capturing each workload's starting and ending metrics snapshots. A client
+can finish observing a cancellation while the Gateway is still finalizing
+accounting and recording its terminal metrics. Both
+[ARM64 control attempts](https://github.com/nickna/Conduit/actions/runs/45559660323)
+caught one active warmup at the starting scrape and then counted 11 events
+for a 10-stream sample. The wait stays outside the CPU measurement window.
+The capture retains the first busy scrape for review, and the strict
+histogram count validation still applies.
+
 For Gateway qualification, run from a full checkout containing the candidate:
 
 ```powershell
