@@ -75,7 +75,7 @@ if($Stage -eq 'prepare'){
 }
 $isolatedStandard = $configuration.profile -ceq 'sse-isol'
 if ($isolatedStandard -and ($cohorts.Count -ne 3 -or $configuration.runs -ne 6 -or
-  $cases.Count -ne 1 -or $cases[0].id -cnotin @('standard-100','standard-1000','standard-10000','responses-sse','audio-1MiB-c1'))) {
+  $cases.Count -ne 1 -or $cases[0].id -cnotin @('standard-100','standard-1000','standard-10000','responses-sse','audio-1MiB-c1','enhanced-bursts'))) {
  throw 'Expected three cohorts, six repetitions and one isolated case'
 }
 if($configuration.infrastructurePrepared -ne $true){throw 'Require explicit fixture preparation receipt before measurement'}

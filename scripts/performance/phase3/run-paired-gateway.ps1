@@ -9,7 +9,7 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [switch]$SameRevisionControl,
       [ValidateSet(0,100,1000,10000)][int]$IsolatedStandardChunks=0,
       [switch]$ExcludeIsolatedStandardCases,
-      [ValidateSet('responses-sse','audio-1MiB-c1')][string]$DiagnosticWorkload)
+      [ValidateSet('responses-sse','audio-1MiB-c1','enhanced-bursts')][string]$DiagnosticWorkload)
 $ErrorActionPreference='Stop'
 if ($DiagnosticWorkload -and $IsolatedStandardChunks) { throw 'Choose one isolated workload' }
 $isolatedStandard = $IsolatedStandardChunks -ne 0 -or $DiagnosticWorkload
@@ -198,6 +198,7 @@ if($Profile -eq 'main'){
    $sampleCounts = @{
     'responses-sse' = @{requests=600;warmups=100}
     'audio-1MiB-c1' = @{requests=240;warmups=40}
+    'enhanced-bursts' = @{requests=300;warmups=45}
    }[$DiagnosticWorkload]
   }
   $mainCatalog.cases[0].requests = $sampleCounts.requests

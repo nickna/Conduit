@@ -17,14 +17,12 @@ jobs:
         include:
           - arch: X64
             runner: ubuntu-24.04
-          - arch: Arm64
-            runner: ubuntu-24.04-arm
     timeout-minutes: 90
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
       BASELINE_REVISION: '96ffd94da1286becc60404858c948824235bea93'
-      CANDIDATE_REVISION: '58098e3c2a28159feaa9809e8f3132b25d125fbe'
+      CANDIDATE_REVISION: 'd41d3b3e7b6298052c6d8fdeccaa937482d27fad'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,13 +36,13 @@ jobs:
       - name: Verify frozen fixture bytes
         shell: pwsh
         run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-isolated/frozen-inputs.json'
-      - name: Measure the two cases on the same runner
+      - name: Measure isolated enhanced SSE bursts
         shell: pwsh
         env:
           EVIDENCE_ROOT: ${{ runner.temp }}/phase3-isolated
         run: |
           $arch = '${{ matrix.arch }}'
-          $cases = if ($arch -eq 'X64') { @('audio-1MiB-c1', 'responses-sse') } else { @('audio-1MiB-c1', 'standard-1000') }
+          $cases = @('enhanced-bursts')
           foreach ($caseName in $cases) {
             $output = Join-Path $env:EVIDENCE_ROOT $caseName
             $arguments = @{
