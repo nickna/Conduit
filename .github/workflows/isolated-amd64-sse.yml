@@ -1,0 +1,62 @@
+name: Isolated amd64 standard SSE
+
+on:
+  push:
+    branches: [codex/pr1778-isolated-amd64]
+
+permissions:
+  contents: read
+
+jobs:
+  isolated:
+    name: Standard SSE candidate and identical-binary control
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      BASELINE_REVISION: '96ffd94da1286becc60404858c948824235bea93'
+      CANDIDATE_REVISION: '4a27f71dce54586fe950f1ee5cb537561377f4aa'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify frozen fixture bytes
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-isolated/frozen-inputs.json'
+      - name: Measure three isolated cases on the same runner
+        shell: pwsh
+        env:
+          EVIDENCE_ROOT: ${{ runner.temp }}/phase3-isolated
+        run: |
+          foreach ($chunks in 100, 1000, 10000) {
+            $output = Join-Path $env:EVIDENCE_ROOT "standard-$chunks"
+            ./scripts/performance/phase3/run-paired-gateway.ps1 -CandidateRevision $env:CANDIDATE_REVISION `
+              -BaselineRevision $env:BASELINE_REVISION -Architecture X64 -Runs 6 `
+              -IsolatedStandardChunks $chunks -OutputDirectory $output
+            $report = Get-Content -Raw -LiteralPath (Join-Path $output 'summary.json') | ConvertFrom-Json
+            foreach ($comparison in $report.comparisons) {
+              $cpu = $comparison.metrics.serverWindowCpuMillisecondsPerValidated
+              Write-Output "$($comparison.case) $($comparison.candidate) median CPU ratio $($cpu.medianPairedRatio)"
+            }
+          }
+      - name: Retain isolated evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-X64-isolated-standard
+          path: |
+            ${{ runner.temp }}/phase3-isolated
+            !${{ runner.temp }}/phase3-isolated/*/work/fixed/**
+            !${{ runner.temp }}/phase3-isolated/*/work/candidate/**
+            !${{ runner.temp }}/phase3-isolated/*/work/legacy/**
+            !${{ runner.temp }}/phase3-isolated/*/work/seed-source/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
