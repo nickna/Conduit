@@ -5,18 +5,24 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [Parameter(Mandatory)][ValidateSet('X64','Arm64')][string]$Architecture,
       [Parameter(Mandatory)][string]$OutputDirectory,
       [ValidateSet('main','pressure')][string]$Profile='main',
-      [ValidateRange(3,6)][int]$Runs=5,
+      [ValidateRange(3,12)][int]$Runs=5,
       [switch]$SameRevisionControl,
       [ValidateSet(0,100,1000,10000)][int]$IsolatedStandardChunks=0,
       [switch]$ExcludeIsolatedStandardCases,
-      [switch]$InterleavedControl)
+      [switch]$InterleavedControl,
+      [switch]$CalibrateControl)
 $ErrorActionPreference='Stop'
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
-if ($InterleavedControl -and ($isolatedStandard -or $SameRevisionControl -or
- $ExcludeIsolatedStandardCases -or $Runs -ne 6)) {
- throw 'The interleaved control requires a full profile and six repetitions'
+$repetitions = if ($Profile -eq 'pressure' -and $CalibrateControl) { 12 } else { 6 }
+if ($CalibrateControl -and !$threeArms) {
+ throw 'Calibration requires a byte-identical control'
 }
+if ($InterleavedControl -and ($isolatedStandard -or $SameRevisionControl -or
+ $ExcludeIsolatedStandardCases -or $Runs -ne $repetitions)) {
+ throw "The interleaved control requires a full profile and $repetitions repetitions"
+}
+if (!$threeArms -and $Runs -gt 6) { throw 'Uncontrolled profiles support up to six repetitions' }
 $standardCases = @('standard-100', 'standard-1000', 'standard-10000')
 if ($ExcludeIsolatedStandardCases -and ($Architecture -ne 'X64' -or $Profile -ne 'main' -or
  $isolatedStandard -or $SameRevisionControl)) {
@@ -29,6 +35,15 @@ if(!$IsLinux -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitectu
 $repository=(& git rev-parse --show-toplevel).Trim()
 $qualificationRoot=Join-Path $repository 'scripts/qualification'
 if($LASTEXITCODE -ne 0){throw 'Require a Git checkout'}
+$cpuPlacement = $null
+$fixtureCpuArgs = @()
+if ($CalibrateControl) {
+ . (Join-Path $qualificationRoot 'gateway-cpu-placement.ps1')
+ $cpuPlacement = Get-GatewayCpuPlacement
+ $taskset = (Get-Command taskset -CommandType Application).Source
+ $pwsh = (Get-Process -Id $PID).Path
+ $fixtureCpuArgs = @('--cpuset-cpus', $cpuPlacement.fixture)
+}
 & git merge-base --is-ancestor $CandidateRevision HEAD
 if($LASTEXITCODE -ne 0){throw 'Candidate must be an ancestor of the qualification checkout'}
 & git merge-base --is-ancestor $BaselineRevision HEAD
@@ -74,6 +89,16 @@ function Invoke-Docker([string[]]$Arguments){
  $value=(& docker @Arguments) -join "`n"
  if($LASTEXITCODE -ne 0){throw "Docker command failed: $($Arguments[0])"}
  return $value
+}
+function Invoke-MatchedStage([string]$Configuration, [string]$Directory, [string]$Stage) {
+ $driver = Join-Path $qualificationRoot 'run-matched.ps1'
+ if (!$cpuPlacement) {
+  & $driver -ConfigurationPath $Configuration -OutputDirectory $Directory -Stage $Stage
+  return
+ }
+ & $taskset --cpu-list $cpuPlacement.fixture $pwsh -NoLogo -NoProfile -File $driver `
+  -ConfigurationPath $Configuration -OutputDirectory $Directory -Stage $Stage
+ if ($LASTEXITCODE -ne 0) { throw "CPU-pinned Gateway $Stage failed. Inspect $Directory." }
 }
 function Get-PublishedInputDelta {
  $expected=[Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
@@ -171,7 +196,7 @@ $primaryCatalog=Join-Path $qualificationRoot 'pressure-native-catalog.json'
 if ($Profile -eq 'pressure' -and $InterleavedControl) {
  $pressureCatalog = Get-Content -Raw -LiteralPath $primaryCatalog | ConvertFrom-Json
  $pressureCatalog.repetitions = $Runs
- $pressureCatalog.order = 'Six balanced cohort orders with the original four pressure cases.'
+ $pressureCatalog.order = "$Runs repetitions of the original four pressure cases in balanced cohort orders."
  $pressureCatalog | Add-Member -NotePropertyName phase3BaseCatalogSha256 -NotePropertyValue (Get-FileHash -LiteralPath $primaryCatalog).Hash.ToLowerInvariant()
  $primaryCatalog = Join-Path $out 'pressure-catalog.json'
  $pressureCatalog | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $primaryCatalog -Encoding utf8NoBOM
@@ -197,6 +222,28 @@ if($Profile -eq 'main'){
    $case.warmupRequests=[Math]::Max($case.warmupRequests*3, $case.concurrency)
   }
  }
+ if ($CalibrateControl -and !$isolatedStandard) {
+  # Extend short windows that repeatedly produced unstable A/A estimates.
+  # Preserve each payload, concurrency, pacing, and workload position.
+  $sampleCounts = @{
+   'responses-json' = @(600, 150)
+   'standard-100' = @(180, 40)
+   'enhanced-100' = @(180, 40)
+   'standard-1000' = @(72, 16)
+   'enhanced-1000' = @(72, 16)
+   'standard-10000' = @(18, 6)
+   'enhanced-10000' = @(18, 6)
+   'audio-1MiB-c1' = @(180, 30)
+   'audio-1MiB-c4' = @(180, 30)
+   'audio-8MiB-c1' = @(90, 15)
+   'audio-8MiB-c4' = @(90, 15)
+  }
+  foreach ($case in $mainCatalog.cases) {
+   if ($sampleCounts.ContainsKey($case.id)) {
+    $case.requests, $case.warmupRequests = $sampleCounts[$case.id]
+   }
+  }
+ }
  if ($isolatedStandard) {
   $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -ceq "standard-$IsolatedStandardChunks")
   if ($mainCatalog.cases.Count -ne 1) { throw 'Expected one frozen standard SSE workload' }
@@ -205,6 +252,9 @@ if($Profile -eq 'main'){
    1000 = @{requests=120;warmups=24}
    10000 = @{requests=60;warmups=12}
   }[$IsolatedStandardChunks]
+  if ($CalibrateControl -and $IsolatedStandardChunks -eq 100) {
+   $sampleCounts = @{requests = 600; warmups = 80}
+  }
   $mainCatalog.cases[0].requests = $sampleCounts.requests
   $mainCatalog.cases[0].warmupRequests = $sampleCounts.warmups
  }
@@ -236,27 +286,28 @@ if ($InterleavedControl) {
  $config.interleavedControl = $true
  $config.scope = "Full Gateway $Profile workloads on one native runner with three balanced .NET 11 arms. The legacy arm copies the baseline binaries and has separate seeded fixture state."
 }
+if ($cpuPlacement) { $config.cpuPlacement = $cpuPlacement }
 $configPath=Join-Path $out 'configuration.json';$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
 $before=Invoke-Docker @('ps','-aq');$before|Set-Content "$out/outside-containers-before.txt" -Encoding utf8NoBOM
 try{
  [void](Invoke-Docker @('network','create','--label','conduit.task=dotnet11-phase2',$task))
  $pg="$task-postgres";$redis="$task-redis"
- [void](Invoke-Docker @('run','--detach','--name',$pg,'--label','conduit.task=dotnet11-phase2','--network',$task,'--publish','127.0.0.1:15476:5432',
+ [void](Invoke-Docker (@('run','--detach','--name',$pg,'--label','conduit.task=dotnet11-phase2','--network',$task) + $fixtureCpuArgs + @('--publish','127.0.0.1:15476:5432',
   '--env','POSTGRES_USER=phase2','--env','POSTGRES_PASSWORD=isolated-phase2-fixture','--env','POSTGRES_DB=phase2_fixed',
-  'postgres:16.15@sha256:f9a7b9ebf6f56201f949db745e47bc423c0f0f8294bafe991cc10bf74b029657'));$containers.Add($pg)
- [void](Invoke-Docker @('run','--detach','--name',$redis,'--label','conduit.task=dotnet11-phase2','--network',$task,'--publish','127.0.0.1:16476:6379',
-  'redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952'));$containers.Add($redis)
+  'postgres:16.15@sha256:f9a7b9ebf6f56201f949db745e47bc423c0f0f8294bafe991cc10bf74b029657')));$containers.Add($pg)
+ [void](Invoke-Docker (@('run','--detach','--name',$redis,'--label','conduit.task=dotnet11-phase2','--network',$task) + $fixtureCpuArgs + @('--publish','127.0.0.1:16476:6379',
+  'redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952')));$containers.Add($redis)
  $deadline=[DateTime]::UtcNow.AddSeconds(60)
  while($true){& docker exec $pg pg_isready -h 127.0.0.1 -U phase2 -d phase2_fixed *> $null;if($LASTEXITCODE -eq 0){break};if([DateTime]::UtcNow -gt $deadline){throw 'PostgreSQL readiness failed'};Start-Sleep -Milliseconds 500}
  foreach($database in @($cohortDefinitions | Where-Object id -cne 'fixed' | ForEach-Object { "phase2_$($_.id)" })){[void](Invoke-Docker @('exec',$pg,'createdb','-U','phase2',$database))}
  Invoke-Docker (@('inspect')+$containers.ToArray())|Set-Content "$out/infrastructure.json" -Encoding utf8NoBOM
- & (Join-Path $qualificationRoot 'run-matched.ps1') -ConfigurationPath $configPath -OutputDirectory (Join-Path $out 'prepare') -Stage prepare
+ Invoke-MatchedStage $configPath (Join-Path $out 'prepare') 'prepare'
  foreach($database in @($cohortDefinitions | ForEach-Object { "phase2_$($_.id)" })){
   Get-Content -Raw (Join-Path $qualificationRoot 'fixture-controls.sql')|& docker exec -i $pg psql -X -v ON_ERROR_STOP=1 -U phase2 -d $database *> "$out/$database-controls.log"
   if($LASTEXITCODE -ne 0){throw 'Fixture controls failed'}
  }
  $config.infrastructurePrepared=$true;$prepared=$true;$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
- & (Join-Path $qualificationRoot 'run-matched.ps1') -ConfigurationPath $configPath -OutputDirectory (Join-Path $out 'measure') -Stage measure
+ Invoke-MatchedStage $configPath (Join-Path $out 'measure') 'measure'
  if ($Profile -eq 'main' -and !$isolatedStandard) {
  # Expand ordinary protocol workloads before evaluating p99 point estimates.
  # Long streams, pressure, cancellation and paced readers remain separately
@@ -278,7 +329,7 @@ try{
   if(!$row.knownProductionFinding){$coreConfig.initialLogCounts[$row.cohort]+=[int]$row.requests}
  }
  $coreConfigPath=Join-Path $out 'core-configuration.json';$coreConfig|ConvertTo-Json -Depth 8|Set-Content $coreConfigPath -Encoding utf8NoBOM
- & (Join-Path $qualificationRoot 'run-matched.ps1') -ConfigurationPath $coreConfigPath -OutputDirectory (Join-Path $out 'core-measure') -Stage measure
+ Invoke-MatchedStage $coreConfigPath (Join-Path $out 'core-measure') 'measure'
  }
 }catch{$failure=$_.ToString();throw}finally{
  $cleanupFailures=[Collections.Generic.List[string]]::new()

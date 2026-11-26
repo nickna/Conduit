@@ -2,12 +2,14 @@
 param(
     [Parameter(Mandatory)][ValidateSet('main', 'pressure', 'isolated-standard')][string]$Profile,
     [Parameter(Mandatory)][string]$EvidenceDirectory,
-    [switch]$InterleavedControl
+    [switch]$InterleavedControl,
+    [switch]$CalibrateControl
 )
 
 $ErrorActionPreference = 'Stop'
 $hasControl = $Profile -ne 'pressure' -or $InterleavedControl
-$pairCount = if ($hasControl) { 6 } else { 5 }
+$pairCount = if ($Profile -eq 'pressure' -and $CalibrateControl) { 12 } elseif ($hasControl) { 6 } else { 5 }
+if ($CalibrateControl -and !$hasControl) { throw 'Calibration requires a byte-identical control' }
 $expectedPairs = @('fixed->candidate')
 if ($hasControl) {
     $expectedPairs += 'fixed->legacy', 'legacy->fixed', 'legacy->candidate'
@@ -29,6 +31,10 @@ foreach ($name in $reports) {
     $report = Get-Content -Raw -LiteralPath (Join-Path $EvidenceDirectory $name) | ConvertFrom-Json
     if (!$report.collectionValidated -or !$report.allWorkloadsPassed -or !$report.comparisons.Count) {
         throw "Incomplete performance evidence in $name"
+    }
+
+    if ($CalibrateControl -and (!$report.bindings.cpuPlacement.gateway -or !$report.bindings.cpuPlacement.fixture)) {
+        throw "Missing CPU placement evidence in $name"
     }
 
     $byCase = @($report.comparisons | Group-Object case)

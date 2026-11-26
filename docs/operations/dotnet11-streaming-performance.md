@@ -64,7 +64,7 @@ arms across positions on the same runner. Candidate CPU ratios were 0.986,
 The [raw evidence](https://github.com/nickna/Conduit/actions/runs/45554344845/artifacts/14997461747)
 includes the historical comparison's exact candidate and baseline revisions.
 
-The isolated job checks the same candidate thresholds with 240, 120 and 60
+The isolated job checks the same candidate thresholds with 600, 120 and 60
 measured requests per repetition, with separate warmups. The frozen workload,
 payload and concurrency are preserved. The same bidirectional control check
 applies to every evaluated metric. All three arms must pass strict protocol
@@ -86,13 +86,14 @@ For Gateway qualification, run from a full checkout containing the candidate:
 ./scripts/performance/phase3/run-paired-gateway.ps1 `
   -CandidateRevision <full-candidate-SHA> -BaselineRevision <full-base-SHA> `
   -Architecture X64 `
-  -Profile main -Runs 6 -InterleavedControl -OutputDirectory <fresh-directory>
+  -Profile main -Runs 6 -InterleavedControl -CalibrateControl -OutputDirectory <fresh-directory>
 ```
 
 Repeat on matching native ARM64 hardware. Run ARM64 pressure with
-`-Profile pressure -Runs 6 -InterleavedControl` and x64 pressure with
-`-Profile pressure -Runs 5`. For ARM64 pressure, pass `-InterleavedControl`
-to the budget checker as well. The versioned provider, client, observer, capture and
+`-Profile pressure -Runs 12 -InterleavedControl -CalibrateControl` and x64
+pressure with `-Profile pressure -Runs 5`. Pass `-CalibrateControl` to the
+budget checker for the calibrated profiles and `-InterleavedControl` for the
+ARM64 pressure profile. The versioned provider, client, observer, capture and
 reconciliation tools remain source-bound. Both sources must pass protocol and
 financial checks. Main derives its catalog from the unchanged phase-0 fixture,
 retaining all case options and increasing sample counts and warmups for
@@ -173,6 +174,24 @@ working budgets against both references. Paced standard SSE CPU ratios were
 baseline-to-copy ratio was 1.006. The earlier five-pair comparison measured
 1.052 against the baseline. All 72 workload windows validated, and the
 financial invariants passed for every arm.
+
+## Control repeatability
+
+Calibrated jobs put the Gateway and its observer on one CPU set and the
+workload client, provider, PostgreSQL, and Redis on another. CPU sets are
+derived from the current runner's allowed CPUs with hardware thread siblings
+kept together. Each artifact records the layout and verifies the observed
+Gateway and provider affinity before starting the workload. The resulting
+CPU allocation is part of the benchmark environment.
+
+Main keeps the same endpoints, payloads, concurrency, and workload rotation.
+It uses longer windows for Responses JSON, ordinary 100-, 1,000-, and
+10,000-chunk SSE, and audio, where earlier controls varied across runs. The
+isolated 100-chunk case measures 600 requests with 80 warmups per arm and
+repetition. ARM64 pressure keeps its four workload definitions, including the
+original pacing and zero warmups, and runs two balanced six-order blocks.
+All original budgets, both directions of the byte-identical comparison, and
+the protocol and financial validations apply.
 
 ## Hardware and remaining gates
 

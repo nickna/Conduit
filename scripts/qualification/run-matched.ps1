@@ -7,7 +7,11 @@ $configuration=Get-Content -Raw -LiteralPath $ConfigurationPath | ConvertFrom-Js
 . (Join-Path $PSScriptRoot 'diagnostic-policy.ps1')
 $diagnostic=$configuration.diagnostic -eq $true -and $configuration.profile -ceq 'pressure8'
 if($configuration.diagnostic -and !$diagnostic){throw 'Diagnostic exception is restricted to pressure8'}
-if($configuration.schemaVersion -ne 1 -or $(if($diagnostic){$configuration.runs -ne 1}else{$configuration.runs -lt 3 -or $configuration.runs -gt 6})){throw 'Invalid qualification configuration'}
+$extendedPressure = $configuration.profile -ceq 'pressure64' -and
+ $configuration.interleavedControl -and $configuration.cpuPlacement -and $configuration.runs -eq 12
+if($configuration.schemaVersion -ne 1 -or $(if($diagnostic){$configuration.runs -ne 1}else{
+ !$extendedPressure -and ($configuration.runs -lt 3 -or $configuration.runs -gt 6)
+})){throw 'Invalid qualification configuration'}
 if(!$IsLinux){throw 'Matched measurements require native Linux'}
 if((Test-Path -LiteralPath $OutputDirectory) -and @(Get-ChildItem -LiteralPath $OutputDirectory -Force).Count){throw 'Use a fresh output directory; previous evidence must remain unchanged'}
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
@@ -33,6 +37,12 @@ if($diagnostic){
  $ssExecutable=(Get-Command ss -CommandType Application -ErrorAction Stop|Select-Object -First 1).Source
 }
 if($configuration.profile -and $configuration.profile -notmatch '^[a-z0-9-]{1,10}$'){throw 'Invalid measurement profile'}
+$cpuPlacement = $configuration.cpuPlacement
+if ($cpuPlacement) {
+ . (Join-Path $PSScriptRoot 'gateway-cpu-placement.ps1')
+ $taskset = (Get-Command taskset -CommandType Application).Source
+ if ((Get-LinuxProcessCpus $PID) -cne $cpuPlacement.fixture) { throw 'Fixture process CPU affinity differs from the configured placement' }
+}
 $bindings=[ordered]@{schemaVersion=1;stage=$Stage;configurationSha256=(Get-FileHash $ConfigurationPath -Algorithm SHA256).Hash.ToLowerInvariant();
  nativeArchitecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString();processorCount=[Environment]::ProcessorCount;cpuTopology=(& lscpu);osRelease=@(Get-Content /etc/os-release);
  tcpConfiguration=@(foreach($name in @('net.ipv4.tcp_rmem','net.ipv4.tcp_wmem','net.ipv4.tcp_adv_win_scale','net.ipv4.tcp_moderate_rcvbuf','net.ipv4.tcp_congestion_control','net.ipv4.tcp_autocorking','net.ipv4.tcp_rto_min_us','net.core.rmem_max','net.core.wmem_max')){$path='/proc/sys/'+$name.Replace('.','/');[ordered]@{name=$name;available=(Test-Path $path);value=$(if(Test-Path $path){(Get-Content $path)}else{$null})}});
@@ -43,6 +53,7 @@ $bindings=[ordered]@{schemaVersion=1;stage=$Stage;configurationSha256=(Get-FileH
  gcEnvironment=@(Get-ChildItem Env:|Where-Object{$_.Name -match '^(DOTNET|COMPlus)_(GC|Heap|ServerGC|ConcurrentGC)' }|ForEach-Object{[ordered]@{name=$_.Name;value=$_.Value}});
  scope='Matched JIT diagnostic fixture; provider/client fixed on .NET 10 with a fresh provider per cohort/run and identical logical payload IDs across source pairs; same Linux kernel/monotonic clock and infrastructure; no production capacity or deployment claim'}
 if($bindings.nativeArchitecture -cne $configuration.architecture){throw 'Native architecture does not match requested qualification'}
+if ($cpuPlacement) { $bindings.cpuPlacement = $cpuPlacement }
 $bindings|ConvertTo-Json -Depth 8|Set-Content "$out/bindings.json" -Encoding utf8NoBOM
 if($bindings.gcEnvironment.Count){throw 'Default-GC qualification requires no external GC environment overrides; retained bindings identify the conflicting settings'}
 Remove-Item Env:DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
@@ -75,8 +86,8 @@ if($Stage -eq 'prepare'){
 }
 $isolatedStandard = $configuration.profile -ceq 'sse-isol'
 $threeArms = $isolatedStandard -or $configuration.interleavedControl
-if ($threeArms -and ($cohorts.Count -ne 3 -or $configuration.runs -ne 6)) {
- throw 'Expected three cohorts and six repetitions for the interleaved control'
+if ($threeArms -and ($cohorts.Count -ne 3 -or ($configuration.runs -ne 6 -and !$extendedPressure))) {
+ throw 'Invalid interleaved cohort or repetition inventory'
 }
 if ($isolatedStandard -and ($cases.Count -ne 1 -or $cases[0].id -cnotin @('standard-100','standard-1000','standard-10000') -or
   $cases[0].endpoint -cne 'standard-sse')) {
@@ -141,7 +152,7 @@ try{
  for($run=1;$run -le $configuration.runs;$run++){
   $order=if($run%2 -eq 1){@($cohorts)}else{@($cohorts[($cohorts.Count-1)..0])}
   if ($threeArms) {
-   # Each cohort runs in each of the three positions twice over six repetitions.
+   # Each block of six repetitions places each cohort in each position twice.
    $first = [int][Math]::Floor(($run - 1) / 2)
    $direction = if ($run % 2 -eq 1) { 1 } else { 2 }
    $order = @(0..2 | ForEach-Object { $cohorts[($first + $direction * $_) % 3] })
@@ -160,8 +171,21 @@ try{
    $providerIdentity=Read-Json 'http://127.0.0.1:18083/identity' "$out/$prefix-provider-identity.json"
    $providerHash=(Get-FileHash -LiteralPath $configuration.provider -Algorithm SHA256).Hash.ToLowerInvariant()
    if($configuration.providerObservationVersion -ne 2 -or $providerIdentity.providerObservationVersion -ne 2 -or $providerIdentity.processId -ne $provider.Process.Id -or $providerIdentity.actualRuntime -cne '10.0.15' -or $providerIdentity.architecture -cne $configuration.architecture -or $providerIdentity.sourceSdk -cne '10.0.404' -or $providerIdentity.assemblySha256 -cne $providerHash){throw 'Fixed ProviderV2 identity/runtime/compiler/binary differs'}
-   $hostOwned=Start-Owned "$prefix-gateway" $cohort.dotnet @($cohort.gateway) $true
+   if ($cpuPlacement) {
+    $hostOwned = Start-Owned "$prefix-gateway" $taskset @('--cpu-list', $cpuPlacement.gateway, $cohort.dotnet, $cohort.gateway) $true
+   } else {
+    $hostOwned=Start-Owned "$prefix-gateway" $cohort.dotnet @($cohort.gateway) $true
+   }
    $ready=Await-Ready 'http://127.0.0.1:18080/health/ready' $hostOwned 120
+   if ($cpuPlacement) {
+    $gatewayCpus = Get-LinuxProcessCpus $hostOwned.Process.Id
+    $providerCpus = Get-LinuxProcessCpus $provider.Process.Id
+    [ordered]@{gateway=$gatewayCpus;provider=$providerCpus} |
+     ConvertTo-Json | Set-Content "$out/$prefix-cpu-affinity.json" -Encoding utf8NoBOM
+    if ($gatewayCpus -cne $cpuPlacement.gateway -or $providerCpus -cne $cpuPlacement.fixture) {
+     throw 'Gateway or provider CPU affinity differs from the configured placement'
+    }
+   }
    $identity=Read-Json 'http://127.0.0.1:18084/snapshot' "$out/$prefix-identity.json"
    if($identity.snapshot.runtimeVersion -cne $cohort.expectedRuntime -or $identity.snapshot.architecture -cne $configuration.architecture){throw 'Actual Gateway runtime/architecture differs from requested cohort'}
    [void](Read-Json 'http://127.0.0.1:18084/snapshot?collect=true' "$out/$prefix-before-idle-gc.json")

@@ -35,7 +35,7 @@ jobs:
   matched:
     name: Phase 3 (${{ matrix.arch }}, ${{ matrix.profile }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: ${{ matrix.profile == 'main' && 210 || 120 }}
     strategy:
       fail-fast: false
       matrix:
@@ -91,8 +91,9 @@ jobs:
           -BaselineRevision $env:BASELINE_REVISION
           -Architecture '${{ matrix.arch }}'
           -Profile '${{ matrix.profile }}'
-          -Runs ${{ matrix.interleaved_control && 6 || 5 }}
+          -Runs ${{ (matrix.profile == 'pressure' && matrix.interleaved_control) && 12 || matrix.interleaved_control && 6 || 5 }}
           -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -CalibrateControl:('${{ matrix.interleaved_control }}' -eq 'true')
           -OutputDirectory '${{ runner.temp }}/phase3-gateway'
       - name: Measure isolated standard SSE with a byte-identical control
         if: matrix.profile == 'isolated-standard'
@@ -104,7 +105,7 @@ jobs:
             $output = Join-Path $env:EVIDENCE_DIRECTORY "standard-$chunks"
             ./scripts/performance/phase3/run-paired-gateway.ps1 -CandidateRevision $env:CANDIDATE_REVISION `
               -BaselineRevision $env:BASELINE_REVISION -Architecture X64 -Runs 6 `
-              -IsolatedStandardChunks $chunks -OutputDirectory $output
+              -IsolatedStandardChunks $chunks -CalibrateControl -OutputDirectory $output
           }
       - name: Verify paired micro evidence rejection
         if: matrix.profile == 'micro-queue'
@@ -174,3 +175,4 @@ jobs:
           ./scripts/performance/phase3/check-gateway-budgets.ps1
           -Profile '${{ matrix.profile }}' -EvidenceDirectory '${{ runner.temp }}/phase3-gateway'
           -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -CalibrateControl:('${{ matrix.interleaved_control }}' -eq 'true' -or '${{ matrix.profile }}' -eq 'isolated-standard')
