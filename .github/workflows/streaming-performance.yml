@@ -35,7 +35,7 @@ jobs:
   matched:
     name: Phase 3 (${{ matrix.arch }}, ${{ matrix.profile }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ matrix.profile == 'main' && 210 || 120 }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
       matrix:
@@ -43,27 +43,34 @@ jobs:
           - arch: X64
             runner: ubuntu-24.04
             profile: main
+            timeout_minutes: 180
             interleaved_control: true
           - arch: Arm64
             runner: ubuntu-24.04-arm
             profile: main
+            timeout_minutes: 180
             interleaved_control: true
           - arch: X64
             runner: ubuntu-24.04
             profile: isolated-standard
+            timeout_minutes: 90
           - arch: X64
             runner: ubuntu-24.04
             profile: pressure
+            timeout_minutes: 90
           - arch: Arm64
             runner: ubuntu-24.04-arm
             profile: pressure
+            timeout_minutes: 90
             interleaved_control: true
           - arch: X64
             runner: ubuntu-24.04
             profile: micro-queue
+            timeout_minutes: 90
           - arch: Arm64
             runner: ubuntu-24.04-arm
             profile: micro-queue
+            timeout_minutes: 90
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'

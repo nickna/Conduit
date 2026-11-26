@@ -191,7 +191,9 @@ isolated 100-chunk case measures 600 requests with 80 warmups per arm and
 repetition. ARM64 pressure keeps its four workload definitions, including the
 original pacing and zero warmups, and runs two balanced six-order blocks.
 All original budgets, both directions of the byte-identical comparison, and
-the protocol and financial validations apply.
+the protocol and financial validations apply. Only the mixed main lanes have
+a 180-minute job timeout so both primary and core measurements can finish on
+one runner.
 
 ## Hardware and remaining gates
 
