@@ -8,9 +8,15 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [ValidateRange(3,6)][int]$Runs=5,
       [switch]$SameRevisionControl,
       [ValidateSet(0,100,1000,10000)][int]$IsolatedStandardChunks=0,
-      [switch]$ExcludeIsolatedStandardCases)
+      [switch]$ExcludeIsolatedStandardCases,
+      [switch]$InterleavedControl)
 $ErrorActionPreference='Stop'
 $isolatedStandard = $IsolatedStandardChunks -ne 0
+$threeArms = $isolatedStandard -or $InterleavedControl
+if ($InterleavedControl -and ($Profile -ne 'main' -or $isolatedStandard -or $SameRevisionControl -or
+ $ExcludeIsolatedStandardCases -or $Runs -ne 6)) {
+ throw 'The interleaved control requires the full mixed main and core profiles and six repetitions'
+}
 $standardCases = @('standard-100', 'standard-1000', 'standard-10000')
 if ($ExcludeIsolatedStandardCases -and ($Architecture -ne 'X64' -or $Profile -ne 'main' -or
  $isolatedStandard -or $SameRevisionControl)) {
@@ -52,7 +58,7 @@ $containers=[Collections.Generic.List[string]]::new();$failure=$null;$prepared=$
 $cohortDefinitions=@(
  @{id='fixed';sha=$BaselineRevision;sdk='11.0.100';runtime='11.0.0';db=3;known=$false},
  @{id='candidate';sha=$CandidateRevision;sdk='11.0.100';runtime='11.0.0';db=4;known=$false})
-if ($isolatedStandard) {
+if ($threeArms) {
  # The capture tool reserves these three database names. Here legacy is a
  # byte-identical copy of the .NET 11 fixed arm, with its own fixture state.
  $cohortDefinitions = @($cohortDefinitions[0],
@@ -112,7 +118,7 @@ foreach($definition in $cohortDefinitions){
  Invoke-Checked 'git' @('archive','--format=tar',"--output=$archive",$definition.sha) "$out/$($definition.id)-archive.log"
  Invoke-Checked 'tar' @('-xf',$archive,'-C',$source) "$out/$($definition.id)-extract.log"
  $gateway=Join-Path $work "$($definition.id)-gateway";$migrator=Join-Path $work "$($definition.id)-migrator"
- if (($SameRevisionControl -or $isolatedStandard) -and $definition.id -cne 'fixed' -and $definition.sha -ceq $BaselineRevision) {
+ if (($SameRevisionControl -or $threeArms) -and $definition.id -cne 'fixed' -and $definition.sha -ceq $BaselineRevision) {
   Copy-Item -Recurse -LiteralPath (Join-Path $work 'fixed-gateway') -Destination $gateway
   Copy-Item -Recurse -LiteralPath (Join-Path $work 'fixed-migrator') -Destination $migrator
  }else{
@@ -132,7 +138,7 @@ foreach($definition in $cohortDefinitions){
   redisUrl="redis://127.0.0.1:16476/$($definition.db)";knownResponsesFailure=$definition.known})
 }
 $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindings.json" -Encoding utf8NoBOM
-if ($isolatedStandard) {
+if ($threeArms) {
  $referenceFiles = @($sourceBindings[0].files | ForEach-Object {
   $_.path.Substring('fixed'.Length) + ':' + $_.bytes + ':' + $_.sha256
  })
@@ -140,7 +146,7 @@ if ($isolatedStandard) {
   $_.path.Substring('legacy'.Length) + ':' + $_.bytes + ':' + $_.sha256
  })
  if (Compare-Object $referenceFiles $controlFiles -CaseSensitive) {
-  throw 'The isolated control differs from the published baseline'
+  throw 'The byte-identical control differs from the published baseline'
  }
 }
 $seedSource=Join-Path $work 'seed-source';New-Item -ItemType Directory -Path $seedSource|Out-Null
@@ -208,10 +214,19 @@ $config=[ordered]@{schemaVersion=1;profile=$(if($Profile -eq 'pressure'){'pressu
  clientDotnet=(Get-Command dotnet).Source;workload=(Join-Path $work "client/Conduit.Phase0.$clientProject.dll");
  provider=(Join-Path $work 'provider/Conduit.Qualification.ProviderV2.dll');providerObservationVersion=2;
  observer=(Join-Path $work 'observer/Conduit.ServerObserver.dll');drainProbe=(Join-Path $work 'drain/DrainProbe.dll');catalog=$primaryCatalog;cohorts=$cohorts.ToArray()}
+if ($threeArms) {
+ $config.comparisons += @(
+  @{baseline='fixed';candidate='legacy'},
+  @{baseline='legacy';candidate='fixed'},
+  @{baseline='legacy';candidate='candidate'})
+}
 if ($isolatedStandard) {
  $config.profile = 'sse-isol'
  $config.scope = 'One standard SSE workload with a fresh Gateway per arm and repetition. Three matched .NET 11 arms with independent seeded databases. The legacy arm copies the baseline binaries.'
- $config.comparisons += @{baseline='fixed';candidate='legacy'}
+}
+if ($InterleavedControl) {
+ $config.interleavedControl = $true
+ $config.scope = 'Full mixed Gateway workloads on one native runner with three balanced .NET 11 arms. The legacy arm copies the baseline binaries and has separate seeded fixture state.'
 }
 $configPath=Join-Path $out 'configuration.json';$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
 $before=Invoke-Docker @('ps','-aq');$before|Set-Content "$out/outside-containers-before.txt" -Encoding utf8NoBOM
@@ -247,7 +262,8 @@ try{
  [ordered]@{schemaVersion=1;profile='core';scope='1000 measured requests and 100 warmups per run; per-run quantiles, not pooled';cases=$coreCases}|ConvertTo-Json -Depth 8|Set-Content $coreCatalog -Encoding utf8NoBOM
  $coreConfig=[ordered]@{};foreach($key in $config.Keys){$coreConfig[$key]=$config[$key]}
  $coreConfig.profile='core';$coreConfig.catalog=$coreCatalog;$coreConfig.cohorts=$cohorts.ToArray()
- $coreConfig.initialLogCounts=[ordered]@{fixed=0;candidate=0}
+ $coreConfig.initialLogCounts=[ordered]@{}
+ foreach($definition in $cohortDefinitions){$coreConfig.initialLogCounts[$definition.id]=0}
  $coreConfig.initialLogCountsSourceManifestSha256=(Get-FileHash (Join-Path $out 'measure/manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
  foreach($row in @(Get-Content -Raw (Join-Path $out 'measure/manifest.json')|ConvertFrom-Json)){
   $coreConfig.initialLogCounts[$row.cohort]+=[int]$row.warmups
@@ -332,7 +348,7 @@ foreach($definition in $cohortDefinitions){
 $inputDelta=Get-PublishedInputDelta
 $inputDelta|ConvertTo-Json -Depth 4|Set-Content "$out/published-input-integrity.json" -Encoding utf8NoBOM
 if(!$inputDelta.passed){throw 'Published input file set or content changed during qualification'}
-[ordered]@{schemaVersion=1;profile=$Profile;isolatedStandardChunks=$IsolatedStandardChunks;baselineRevision=$BaselineRevision;candidateRevision=$CandidateRevision;sameRevisionControl=$SameRevisionControl.IsPresent;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;
+[ordered]@{schemaVersion=1;profile=$Profile;isolatedStandardChunks=$IsolatedStandardChunks;interleavedControl=$InterleavedControl.IsPresent;baselineRevision=$BaselineRevision;candidateRevision=$CandidateRevision;sameRevisionControl=$SameRevisionControl.IsPresent;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;
  primaryCollectionValidated=$summary.collectionValidated;coreCollectionValidated=$coreSummary.collectionValidated;coreAllWorkloadsPassed=$coreSummary.allWorkloadsPassed;
  allocationGateSatisfied=$false;allocationGateStatus=$summary.allocationGateStatus;
  financial=$financialResults.ToArray();performanceAcceptanceGranted=$false;productionRolloutPerformed=$false;

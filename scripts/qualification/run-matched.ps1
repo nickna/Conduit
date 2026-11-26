@@ -74,8 +74,11 @@ if($Stage -eq 'prepare'){
  exit 0
 }
 $isolatedStandard = $configuration.profile -ceq 'sse-isol'
-if ($isolatedStandard -and ($cohorts.Count -ne 3 -or $configuration.runs -ne 6 -or
-  $cases.Count -ne 1 -or $cases[0].id -cnotin @('standard-100','standard-1000','standard-10000') -or
+$threeArms = $isolatedStandard -or $configuration.interleavedControl
+if ($threeArms -and ($cohorts.Count -ne 3 -or $configuration.runs -ne 6)) {
+ throw 'Expected three cohorts and six repetitions for the interleaved control'
+}
+if ($isolatedStandard -and ($cases.Count -ne 1 -or $cases[0].id -cnotin @('standard-100','standard-1000','standard-10000') -or
   $cases[0].endpoint -cne 'standard-sse')) {
  throw 'Expected three cohorts, six repetitions and one standard SSE case'
 }
@@ -137,7 +140,7 @@ foreach($cohort in $cohorts){
 try{
  for($run=1;$run -le $configuration.runs;$run++){
   $order=if($run%2 -eq 1){@($cohorts)}else{@($cohorts[($cohorts.Count-1)..0])}
-  if ($isolatedStandard) {
+  if ($threeArms) {
    # Each cohort runs in each of the three positions twice over six repetitions.
    $first = [int][Math]::Floor(($run - 1) / 2)
    $direction = if ($run % 2 -eq 1) { 1 } else { 2 }

@@ -38,17 +38,20 @@ The UTF-8 prototype is preserved in history, rather than active production code.
 
 ## Reproduction and evidence
 
-The `Phase 3 streaming performance` workflow runs `main`, `pressure`,
-`micro-queue` and an identical-binary `control` separately on `ubuntu-24.04`
-x64 and `ubuntu-24.04-arm` ARM64. The x64 matrix also has an
-`isolated-standard` job for the 100-, 1,000-, and 10,000-chunk standard SSE
-budgets. The x64 main job runs the other workloads and the expanded core
-profile. ARM64 still runs the original matrix.
-Each job has read-only repository permissions, no production secrets and a
-90-minute deadline. The control repeats the main workload with copies of the
-same published Gateway and migrator, separate databases and fresh processes.
-It measures variation and cannot satisfy the candidate comparison. The Gateway
-candidate jobs retain their artifacts before checking the existing budgets.
+The `Phase 3 streaming performance` workflow runs `main`, `pressure` and
+`micro-queue` on native Linux x64 and ARM64. The x64 matrix also runs
+`isolated-standard` for 100-, 1,000-, and 10,000-chunk standard SSE. Each
+main job runs the full mixed and expanded core profiles on one VM, with six
+balanced orders of the baseline, its byte-identical copy, and the candidate.
+Each arm has its own seeded SQL/Redis state and fresh Gateway processes.
+The driver hashes the published Gateway and migrator files in both control
+arms to verify equality. Every job has a 90-minute deadline and read-only
+repository permissions. The workflow uploads evidence before checking budgets.
+
+The gate evaluates the identical-binary comparison in both directions. A
+control breach makes the evidence inconclusive, and the job prints all
+observed candidate breaches alongside it. With controls within budget, the
+candidate must meet the existing budgets against both baseline copies.
 
 The mixed x64 suite put the standard workloads at different positions across
 repetitions. In the byte-identical control, the baseline's 10,000-chunk CPU
@@ -63,11 +66,9 @@ includes the historical comparison's exact candidate and baseline revisions.
 
 The isolated job checks the same candidate thresholds with 240, 120 and 60
 measured requests per repetition, with separate warmups. The frozen workload,
-payload and concurrency are preserved. The identical-binary CPU median must
-fall between the existing CPU threshold and its reciprocal for the isolated
-comparison to qualify. Each of the three seeded arms must pass the strict
-SSE client and financial reconciliation. The mixed control remains available
-for comparison with earlier runs.
+payload and concurrency are preserved. The same bidirectional control check
+applies to every evaluated metric. All three arms must pass strict protocol
+validation and financial reconciliation.
 
 Phase 3 waits for the Gateway's active streams gauge to reach zero before
 capturing each workload's starting and ending metrics snapshots. A client
@@ -85,12 +86,11 @@ For Gateway qualification, run from a full checkout containing the candidate:
 ./scripts/performance/phase3/run-paired-gateway.ps1 `
   -CandidateRevision <full-candidate-SHA> -BaselineRevision <full-base-SHA> `
   -Architecture X64 `
-  -Profile main -OutputDirectory <fresh-directory>
+  -Profile main -Runs 6 -InterleavedControl -OutputDirectory <fresh-directory>
 ```
 
-Repeat with `pressure` and on matching native ARM64 hardware. Main and control
-CI use six fresh-process pairs so each arm runs first three times. Pressure
-uses five pairs. The versioned provider, client, observer, capture and
+Repeat on matching native ARM64 hardware. Run the pressure comparison with
+`-Profile pressure -Runs 5`. The versioned provider, client, observer, capture and
 reconciliation tools remain source-bound. Both sources must pass protocol and
 financial checks. Main derives its catalog from the unchanged phase-0 fixture,
 retaining all case options and increasing sample counts and warmups for
@@ -99,8 +99,9 @@ requests and 100 warmups per run. Low-count long-stream and pressure tails
 remain exploratory distributions.
 
 For compatibility with the unchanged capture guards, the isolated databases,
-resource labels and cohort IDs retain the `phase2` / `fixed` / `candidate` names.
-Here `fixed` means the .NET 11 before source. Unique resource ownership, source
+resource labels and cohort IDs retain the `phase2` namespace. Here `fixed`
+means the .NET 11 baseline, `legacy` names its byte-identical control copy,
+and `candidate` is the proposed change. Unique resource ownership, source
 revisions, canonical archive hashes, actual workspace tool hashes and published
 input hashes are recorded. The naming does not turn these into .NET 10 cohorts.
 
@@ -142,6 +143,24 @@ These synthetic handlers do not debit the application ledger, exercise Redis
 depletion notifications or prove durable application follow-on publication.
 Existing real financial suites and Gateway closure must remain green before any
 production batch change. The fixture is not a production topology or a forecast.
+
+## Same-runner mixed comparisons
+
+The [full native run](https://github.com/nickna/Conduit/actions/runs/45746928196)
+measured 414 primary and 126 core workload windows per architecture across
+the three arms. All evaluated candidate metrics stayed within budget against
+the designated baseline. The identical-binary comparison crossed three
+primary thresholds on x64 and seven on ARM64 when evaluated in both
+directions. Both core controls stayed within budget.
+
+The [x64 fixed-order follow-up](https://github.com/nickna/Conduit/actions/runs/45755838964)
+used larger samples for selected workloads. It cleared the first x64 control
+breaches, and four other primary control comparisons exceeded budgets.
+Cancellation-after-usage CPU increased against both baselines (1.129x and
+1.127x), and 8 MiB audio at concurrency four had lower throughput against
+both (0.907x and 0.930x). These observations warrant reproduction under
+matched mixed-workload history. Both experiments retained protocol,
+financial, source, and binary evidence.
 
 ## Hardware and remaining gates
 
