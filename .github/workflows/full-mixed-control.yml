@@ -1,0 +1,20 @@
+name: PR 1778 full mixed native experiment
+
+on:
+  push:
+    branches: [codex/pr1778-full-mixed-control]
+
+permissions:
+  contents: read
+
+jobs:
+  amd64:
+    uses: ./.github/workflows/full-mixed-control-lane.yml
+    with:
+      architecture: X64
+  arm64:
+    needs: amd64
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/full-mixed-control-lane.yml
+    with:
+      architecture: Arm64

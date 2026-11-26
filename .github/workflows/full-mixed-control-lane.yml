@@ -1,0 +1,76 @@
+name: Same-runner full mixed workload
+
+on:
+  workflow_call:
+    inputs:
+      architecture:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  mixed:
+    name: Full mixed suite (${{ inputs.architecture }})
+    runs-on: ${{ inputs.architecture == 'Arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 90
+    env:
+      BASELINE_REVISION: '96ffd94da1286becc60404858c948824235bea93'
+      CANDIDATE_REVISION: 'd41d3b3e7b6298052c6d8fdeccaa937482d27fad'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify frozen fixture bytes
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/frozen-inputs.json'
+      - name: Collect the full primary and core comparisons
+        shell: pwsh
+        env:
+          EVIDENCE: ${{ runner.temp }}/full-mixed
+        run: >-
+          ./scripts/performance/phase3/run-paired-gateway.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION -BaselineRevision $env:BASELINE_REVISION
+          -Architecture '${{ inputs.architecture }}' -Runs 6 -InterleavedControl -OutputDirectory $env:EVIDENCE
+      - name: Retain raw protocol, measurement and financial evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: full-mixed-${{ inputs.architecture }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/frozen-inputs.json
+            ${{ runner.temp }}/full-mixed
+            !${{ runner.temp }}/full-mixed/work/fixed/**
+            !${{ runner.temp }}/full-mixed/work/legacy/**
+            !${{ runner.temp }}/full-mixed/work/candidate/**
+            !${{ runner.temp }}/full-mixed/work/seed-source/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Report every outside-budget result
+        shell: pwsh
+        env:
+          EVIDENCE: ${{ runner.temp }}/full-mixed
+        run: |
+          foreach ($reportName in 'summary.json', 'core-summary.json') {
+            $report = Get-Content -Raw -LiteralPath (Join-Path $env:EVIDENCE $reportName) | ConvertFrom-Json
+            if (!$report.collectionValidated -or !$report.allWorkloadsPassed) {
+              throw "Incomplete evidence in $reportName"
+            }
+            foreach ($comparison in $report.comparisons) {
+              foreach ($metric in $comparison.metrics.PSObject.Properties) {
+                if ($metric.Value.status -eq 'outside-working-threshold') {
+                  Write-Output "$($report.profile) | $($comparison.baseline) -> $($comparison.candidate) | $($comparison.case) | $($metric.Name) | $($metric.Value.medianPairedRatio)"
+                }
+              }
+            }
+          }
