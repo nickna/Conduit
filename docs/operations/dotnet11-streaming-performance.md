@@ -162,6 +162,33 @@ both (0.907x and 0.930x). These observations warrant reproduction under
 matched mixed-workload history. Both experiments retained protocol,
 financial, source, and binary evidence.
 
+## Dedicated-host repeat for PR 1778
+
+Use an isolated Linux x86-64 host for the main profile and an isolated Linux
+ARM64 host for the pressure profile. Each host needs a native Docker engine,
+PowerShell, Python 3, Git, and .NET SDKs 10.0.404 and 11.0.100. Keep the
+benchmark host idle while each run collects evidence. Use a full checkout
+containing both pinned revisions, then run the following from its root.
+
+```powershell
+$baseline = '96ffd94da1286becc60404858c948824235bea93'
+$candidate = '83508e1353be034eb5b615665eac3971a34b0570'
+$profile, $architecture = 'main', 'X64' # On ARM64 use 'pressure', 'Arm64'.
+$evidence = Join-Path ([IO.Path]::GetTempPath()) "pr1778-$profile-$([Guid]::NewGuid().ToString('N'))"
+./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath "$evidence-input-integrity.json"
+./scripts/performance/phase3/run-paired-gateway.ps1 -CandidateRevision $candidate `
+  -BaselineRevision $baseline -Architecture $architecture -Profile $profile -Runs 6 `
+  -InterleavedControl -OutputDirectory $evidence
+./scripts/performance/phase3/check-gateway-budgets.ps1 -Profile $profile `
+  -InterleavedControl -EvidenceDirectory $evidence
+```
+
+Inspect `audio-1MiB-c1` in the amd64 main report and `pressure-standard-paced`
+in the ARM64 pressure report. Both profiles preserve their surrounding workload
+cases. The pressure repeat keeps the original payloads and pacing and adds a
+byte-identical control and six balanced execution orders. Keep the raw evidence
+even if the budget check rejects a result.
+
 ## Hardware and remaining gates
 
 Windows x64 focused tests and micros are development diagnostics. Linux ARM64

@@ -1,11 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('main', 'pressure', 'isolated-standard')][string]$Profile,
-    [Parameter(Mandatory)][string]$EvidenceDirectory
+    [Parameter(Mandatory)][string]$EvidenceDirectory,
+    [switch]$InterleavedControl
 )
 
 $ErrorActionPreference = 'Stop'
-$hasControl = $Profile -ne 'pressure'
+$hasControl = $Profile -ne 'pressure' -or $InterleavedControl
 $pairCount = if ($hasControl) { 6 } else { 5 }
 $expectedPairs = @('fixed->candidate')
 if ($hasControl) {
