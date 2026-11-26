@@ -13,9 +13,9 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
 $ErrorActionPreference='Stop'
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
-if ($InterleavedControl -and ($Profile -ne 'main' -or $isolatedStandard -or $SameRevisionControl -or
+if ($InterleavedControl -and ($isolatedStandard -or $SameRevisionControl -or
  $ExcludeIsolatedStandardCases -or $Runs -ne 6)) {
- throw 'The interleaved control requires the full mixed main and core profiles and six repetitions'
+ throw 'The interleaved control requires a full profile and six repetitions'
 }
 $standardCases = @('standard-100', 'standard-1000', 'standard-10000')
 if ($ExcludeIsolatedStandardCases -and ($Architecture -ne 'X64' -or $Profile -ne 'main' -or
@@ -168,6 +168,14 @@ $sourceBindings.Add([ordered]@{id='fixed-tools';sourceSdk='10.0.404';files=@(
 )})
 $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindings.json" -Encoding utf8NoBOM
 $primaryCatalog=Join-Path $qualificationRoot 'pressure-native-catalog.json'
+if ($Profile -eq 'pressure' -and $InterleavedControl) {
+ $pressureCatalog = Get-Content -Raw -LiteralPath $primaryCatalog | ConvertFrom-Json
+ $pressureCatalog.repetitions = $Runs
+ $pressureCatalog.order = 'Six balanced cohort orders with the original four pressure cases.'
+ $pressureCatalog | Add-Member -NotePropertyName phase3BaseCatalogSha256 -NotePropertyValue (Get-FileHash -LiteralPath $primaryCatalog).Hash.ToLowerInvariant()
+ $primaryCatalog = Join-Path $out 'pressure-catalog.json'
+ $pressureCatalog | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $primaryCatalog -Encoding utf8NoBOM
+}
 if($Profile -eq 'main'){
  # Keep endpoints, payloads and concurrency identical to the frozen catalog.
  # The short windows of the original fixture could breach working thresholds
@@ -226,7 +234,7 @@ if ($isolatedStandard) {
 }
 if ($InterleavedControl) {
  $config.interleavedControl = $true
- $config.scope = 'Full mixed Gateway workloads on one native runner with three balanced .NET 11 arms. The legacy arm copies the baseline binaries and has separate seeded fixture state.'
+ $config.scope = "Full Gateway $Profile workloads on one native runner with three balanced .NET 11 arms. The legacy arm copies the baseline binaries and has separate seeded fixture state."
 }
 $configPath=Join-Path $out 'configuration.json';$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
 $before=Invoke-Docker @('ps','-aq');$before|Set-Content "$out/outside-containers-before.txt" -Encoding utf8NoBOM

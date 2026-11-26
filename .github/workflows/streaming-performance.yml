@@ -43,9 +43,11 @@ jobs:
           - arch: X64
             runner: ubuntu-24.04
             profile: main
+            interleaved_control: true
           - arch: Arm64
             runner: ubuntu-24.04-arm
             profile: main
+            interleaved_control: true
           - arch: X64
             runner: ubuntu-24.04
             profile: isolated-standard
@@ -55,6 +57,7 @@ jobs:
           - arch: Arm64
             runner: ubuntu-24.04-arm
             profile: pressure
+            interleaved_control: true
           - arch: X64
             runner: ubuntu-24.04
             profile: micro-queue
@@ -88,8 +91,8 @@ jobs:
           -BaselineRevision $env:BASELINE_REVISION
           -Architecture '${{ matrix.arch }}'
           -Profile '${{ matrix.profile }}'
-          -Runs ${{ matrix.profile == 'main' && 6 || 5 }}
-          -InterleavedControl:('${{ matrix.profile }}' -ceq 'main')
+          -Runs ${{ matrix.interleaved_control && 6 || 5 }}
+          -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')
           -OutputDirectory '${{ runner.temp }}/phase3-gateway'
       - name: Measure isolated standard SSE with a byte-identical control
         if: matrix.profile == 'isolated-standard'
@@ -170,3 +173,4 @@ jobs:
         run: >-
           ./scripts/performance/phase3/check-gateway-budgets.ps1
           -Profile '${{ matrix.profile }}' -EvidenceDirectory '${{ runner.temp }}/phase3-gateway'
+          -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')

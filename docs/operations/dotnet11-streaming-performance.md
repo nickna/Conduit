@@ -89,8 +89,10 @@ For Gateway qualification, run from a full checkout containing the candidate:
   -Profile main -Runs 6 -InterleavedControl -OutputDirectory <fresh-directory>
 ```
 
-Repeat on matching native ARM64 hardware. Run the pressure comparison with
-`-Profile pressure -Runs 5`. The versioned provider, client, observer, capture and
+Repeat on matching native ARM64 hardware. Run ARM64 pressure with
+`-Profile pressure -Runs 6 -InterleavedControl` and x64 pressure with
+`-Profile pressure -Runs 5`. For ARM64 pressure, pass `-InterleavedControl`
+to the budget checker as well. The versioned provider, client, observer, capture and
 reconciliation tools remain source-bound. Both sources must pass protocol and
 financial checks. Main derives its catalog from the unchanged phase-0 fixture,
 retaining all case options and increasing sample counts and warmups for
@@ -161,6 +163,16 @@ Cancellation-after-usage CPU increased against both baselines (1.129x and
 both (0.907x and 0.930x). These observations warrant reproduction under
 matched mixed-workload history. Both experiments retained protocol,
 financial, source, and binary evidence.
+
+## ARM64 pressure control
+
+The [three-arm pressure repeat](https://github.com/nickna/Conduit/actions/runs/45776029990)
+retained all four pressure cases, used six balanced orders and passed all
+working budgets against both references. Paced standard SSE CPU ratios were
+0.977 against the baseline and 1.006 against its byte-identical copy. The
+baseline-to-copy ratio was 1.006. The earlier five-pair comparison measured
+1.052 against the baseline. All 72 workload windows validated, and the
+financial invariants passed for every arm.
 
 ## Hardware and remaining gates
 
