@@ -9,8 +9,12 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [switch]$SameRevisionControl,
       [ValidateSet(0,100,1000,10000)][int]$IsolatedStandardChunks=0,
       [switch]$ExcludeIsolatedStandardCases,
-      [switch]$InterleavedControl)
+      [switch]$InterleavedControl,
+      [switch]$StabilizeMixedSampling)
 $ErrorActionPreference='Stop'
+if ($StabilizeMixedSampling -and !$InterleavedControl) {
+ throw 'Stable mixed sampling requires an interleaved control'
+}
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
 if ($InterleavedControl -and ($Profile -ne 'main' -or $isolatedStandard -or $SameRevisionControl -or
@@ -200,6 +204,22 @@ if($Profile -eq 'main'){
   $mainCatalog.cases[0].requests = $sampleCounts.requests
   $mainCatalog.cases[0].warmupRequests = $sampleCounts.warmups
  }
+ if ($StabilizeMixedSampling) {
+  $expandedCases = @{
+   'standard-100' = @{requests=240;warmups=40}
+   'enhanced-100' = @{requests=240;warmups=40}
+   'standard-1000' = @{requests=120;warmups=24}
+   'enhanced-1000' = @{requests=120;warmups=24}
+   'enhanced-tools' = @{requests=1000;warmups=100}
+  }
+  foreach ($case in $mainCatalog.cases) {
+   if ($expandedCases.ContainsKey($case.id)) {
+    $case.requests = $expandedCases[$case.id].requests
+    $case.warmupRequests = $expandedCases[$case.id].warmups
+   }
+  }
+  $mainCatalog.order = 'Fixed catalog order for each independent process; arm order remains balanced'
+ }
  if ($ExcludeIsolatedStandardCases) {
   $covered = @($mainCatalog.cases | Where-Object id -cin $standardCases)
   if ($covered.Count -ne $standardCases.Count) { throw 'The isolated standard workload inventory changed' }
@@ -222,7 +242,8 @@ if ($isolatedStandard) {
 if ($InterleavedControl) {
  $config.interleavedControl = $true
  $config.scope = 'Full mixed Gateway workloads on one native runner with three balanced .NET 11 arms. The legacy arm copies the baseline binaries and has separate seeded fixture state.'
- $config.comparisons += @(@{baseline='fixed';candidate='legacy'},@{baseline='legacy';candidate='fixed'})
+ $config.comparisons += @(@{baseline='fixed';candidate='legacy'},@{baseline='legacy';candidate='fixed'},@{baseline='legacy';candidate='candidate'})
+ $config.fixedWorkloadOrder = $StabilizeMixedSampling.IsPresent
 }
 $configPath=Join-Path $out 'configuration.json';$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
 $before=Invoke-Docker @('ps','-aq');$before|Set-Content "$out/outside-containers-before.txt" -Encoding utf8NoBOM
@@ -344,7 +365,7 @@ foreach($definition in $cohortDefinitions){
 $inputDelta=Get-PublishedInputDelta
 $inputDelta|ConvertTo-Json -Depth 4|Set-Content "$out/published-input-integrity.json" -Encoding utf8NoBOM
 if(!$inputDelta.passed){throw 'Published input file set or content changed during qualification'}
-[ordered]@{schemaVersion=1;profile=$Profile;isolatedStandardChunks=$IsolatedStandardChunks;interleavedControl=$InterleavedControl.IsPresent;baselineRevision=$BaselineRevision;candidateRevision=$CandidateRevision;sameRevisionControl=$SameRevisionControl.IsPresent;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;
+[ordered]@{schemaVersion=1;profile=$Profile;isolatedStandardChunks=$IsolatedStandardChunks;interleavedControl=$InterleavedControl.IsPresent;stableMixedSampling=$StabilizeMixedSampling.IsPresent;baselineRevision=$BaselineRevision;candidateRevision=$CandidateRevision;sameRevisionControl=$SameRevisionControl.IsPresent;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;
  primaryCollectionValidated=$summary.collectionValidated;coreCollectionValidated=$coreSummary.collectionValidated;coreAllWorkloadsPassed=$coreSummary.allWorkloadsPassed;
  allocationGateSatisfied=$false;allocationGateStatus=$summary.allocationGateStatus;
  financial=$financialResults.ToArray();performanceAcceptanceGranted=$false;productionRolloutPerformed=$false;

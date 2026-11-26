@@ -169,7 +169,8 @@ try{
    Start-Sleep -Seconds 3
    [void](Read-Json "http://127.0.0.1:18084/end?id=$prefix-idle" "$out/$prefix-idle-end.json" $true)
    for($index=0;$index -lt $cases.Count;$index++){
-    $case=$cases[($index+$run-1)%$cases.Count];$id="$prefix-$($case.id)"
+    $caseIndex = if ($configuration.fixedWorkloadOrder) { $index } else { ($index + $run - 1) % $cases.Count }
+    $case=$cases[$caseIndex];$id="$prefix-$($case.id)"
     $logicalCaseId="$profileName-r$run-$($case.id)"
     $config=[ordered]@{caseId=$logicalCaseId;baseUrl='http://127.0.0.1:18080';providerUrl='http://127.0.0.1:18083';model='native-aot-model'}
     foreach($property in $case.PSObject.Properties){if($property.Name -ne 'id'){$config[$property.Name]=$property.Value}}

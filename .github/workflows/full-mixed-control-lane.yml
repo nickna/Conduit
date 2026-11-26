@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 90
     env:
       BASELINE_REVISION: '96ffd94da1286becc60404858c948824235bea93'
-      CANDIDATE_REVISION: 'd41d3b3e7b6298052c6d8fdeccaa937482d27fad'
+      CANDIDATE_REVISION: 'c461b62fa5ca57eba1c649b44830bf63808feb98'
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
     steps:
@@ -40,7 +40,7 @@ jobs:
         run: >-
           ./scripts/performance/phase3/run-paired-gateway.ps1
           -CandidateRevision $env:CANDIDATE_REVISION -BaselineRevision $env:BASELINE_REVISION
-          -Architecture '${{ inputs.architecture }}' -Runs 6 -InterleavedControl -OutputDirectory $env:EVIDENCE
+          -Architecture '${{ inputs.architecture }}' -Runs 6 -InterleavedControl -StabilizeMixedSampling -OutputDirectory $env:EVIDENCE
       - name: Retain raw protocol, measurement and financial evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
