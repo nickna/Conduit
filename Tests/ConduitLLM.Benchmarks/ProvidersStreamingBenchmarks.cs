@@ -264,7 +264,7 @@ public static class ProviderMicroHarness
             }
         };
         var json = new JsonSerializerOptions { WriteIndented = true, TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
-        await File.WriteAllTextAsync(Path.Combine(output, "provider-micro.json"), JsonSerializer.Serialize(report, json));
+        await File.WriteAllTextAsync(Path.Join(output, "provider-micro.json"), JsonSerializer.Serialize(report, json));
         return 0;
     }
 

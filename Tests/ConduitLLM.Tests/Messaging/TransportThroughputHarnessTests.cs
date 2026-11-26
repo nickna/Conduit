@@ -223,7 +223,7 @@ public class TransportThroughputHarnessTests
     [Fact]
     public async Task ExistingReceiptIsNotOverwritten_AndCommandFailsBeforeDatastoreAccess()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"queue-contract-{Guid.NewGuid():N}.json");
+        var path = Path.Join(Path.GetTempPath(), $"queue-contract-{Guid.NewGuid():N}.json");
         await File.WriteAllTextAsync(path, "preserved");
         try
         {

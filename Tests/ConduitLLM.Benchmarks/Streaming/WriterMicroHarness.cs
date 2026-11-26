@@ -30,15 +30,19 @@ public static class WriterMicroHarness
         var rows = new List<object>();
         using var process = Process.GetCurrentProcess();
         foreach (var enhanced in new[] { false, true })
-        foreach (var characters in new[] { 32, 1024 })
-        foreach (var frames in new[] { 10, 100, 1000, 10000 })
         {
-            // Identical warmup counts per scenario; not a guarantee of steady-state JIT.
-            await MeasureAsync(enhanced, characters, 100, process);
-            for (var run = 1; run <= 5; run++)
+            foreach (var characters in new[] { 32, 1024 })
             {
-                var observation = await MeasureAsync(enhanced, characters, frames, process);
-                rows.Add(new { run, enhanced, characters, frames, observation });
+                foreach (var frames in new[] { 10, 100, 1000, 10000 })
+                {
+                    // Identical warmup counts per scenario; not a guarantee of steady-state JIT.
+                    await MeasureAsync(enhanced, characters, 100, process);
+                    for (var run = 1; run <= 5; run++)
+                    {
+                        var observation = await MeasureAsync(enhanced, characters, frames, process);
+                        rows.Add(new { run, enhanced, characters, frames, observation });
+                    }
+                }
             }
         }
         var core = typeof(StreamingMetricsCollector).Assembly;
@@ -65,7 +69,7 @@ public static class WriterMicroHarness
                 "Each source must be published separately; do not mix this with frozen phase-0 or phase-2 datasets."
             }
         };
-        await File.WriteAllTextAsync(Path.Combine(output, "writer-micro.json"), JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true, TypeInfoResolver = new DefaultJsonTypeInfoResolver() }));
+        await File.WriteAllTextAsync(Path.Join(output, "writer-micro.json"), JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true, TypeInfoResolver = new DefaultJsonTypeInfoResolver() }));
         return 0;
     }
 
@@ -149,6 +153,14 @@ public static class WriterMicroHarness
         public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
-        protected override void Dispose(bool disposing) { if (disposing) _bytes.Dispose(); base.Dispose(disposing); }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _bytes.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
     }
 }
