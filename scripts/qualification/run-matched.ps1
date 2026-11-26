@@ -40,7 +40,7 @@ if($configuration.profile -and $configuration.profile -notmatch '^[a-z0-9-]{1,10
 $cpuPlacement = $configuration.cpuPlacement
 if ($cpuPlacement) {
  . (Join-Path $PSScriptRoot 'gateway-cpu-placement.ps1')
- $taskset = (Get-Command taskset -CommandType Application).Source
+ $taskset = (Get-Command taskset -CommandType Application | Select-Object -First 1).Source
  if ((Get-LinuxProcessCpus $PID) -cne $cpuPlacement.fixture) { throw 'Fixture process CPU affinity differs from the configured placement' }
 }
 $bindings=[ordered]@{schemaVersion=1;stage=$Stage;configurationSha256=(Get-FileHash $ConfigurationPath -Algorithm SHA256).Hash.ToLowerInvariant();

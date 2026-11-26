@@ -40,7 +40,7 @@ $fixtureCpuArgs = @()
 if ($CalibrateControl) {
  . (Join-Path $qualificationRoot 'gateway-cpu-placement.ps1')
  $cpuPlacement = Get-GatewayCpuPlacement
- $taskset = (Get-Command taskset -CommandType Application).Source
+ $taskset = (Get-Command taskset -CommandType Application | Select-Object -First 1).Source
  $pwsh = (Get-Process -Id $PID).Path
  $fixtureCpuArgs = @('--cpuset-cpus', $cpuPlacement.fixture)
 }
