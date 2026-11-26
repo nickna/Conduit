@@ -1,8 +1,8 @@
-name: PR 1778 stable mixed sampling experiment
+name: PR 1778 mixed cancellation and audio diagnostic
 
 on:
   push:
-    branches: [codex/pr1778-stable-mixed-sampling]
+    branches: [codex/pr1778-mixed-cancellation-audio]
 
 permissions:
   contents: read

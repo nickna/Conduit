@@ -33,14 +33,14 @@ jobs:
       - name: Verify frozen fixture bytes
         shell: pwsh
         run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/frozen-inputs.json'
-      - name: Collect the full primary and core comparisons
+      - name: Collect mixed cancellation and audio diagnostics
         shell: pwsh
         env:
           EVIDENCE: ${{ runner.temp }}/full-mixed
         run: >-
           ./scripts/performance/phase3/run-paired-gateway.ps1
           -CandidateRevision $env:CANDIDATE_REVISION -BaselineRevision $env:BASELINE_REVISION
-          -Architecture '${{ inputs.architecture }}' -Runs 6 -InterleavedControl -StabilizeMixedSampling -OutputDirectory $env:EVIDENCE
+          -Architecture '${{ inputs.architecture }}' -Runs 6 -InterleavedControl -StabilizeMixedSampling -FocusMixedSignals -OutputDirectory $env:EVIDENCE
       - name: Retain raw protocol, measurement and financial evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -61,7 +61,7 @@ jobs:
         env:
           EVIDENCE: ${{ runner.temp }}/full-mixed
         run: |
-          foreach ($reportName in 'summary.json', 'core-summary.json') {
+          foreach ($reportName in 'summary.json') {
             $report = Get-Content -Raw -LiteralPath (Join-Path $env:EVIDENCE $reportName) | ConvertFrom-Json
             if (!$report.collectionValidated -or !$report.allWorkloadsPassed) {
               throw "Incomplete evidence in $reportName"

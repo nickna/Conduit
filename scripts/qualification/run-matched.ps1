@@ -43,6 +43,10 @@ $bindings=[ordered]@{schemaVersion=1;stage=$Stage;configurationSha256=(Get-FileH
  gcEnvironment=@(Get-ChildItem Env:|Where-Object{$_.Name -match '^(DOTNET|COMPlus)_(GC|Heap|ServerGC|ConcurrentGC)' }|ForEach-Object{[ordered]@{name=$_.Name;value=$_.Value}});
  scope='Matched JIT diagnostic fixture; provider/client fixed on .NET 10 with a fresh provider per cohort/run and identical logical payload IDs across source pairs; same Linux kernel/monotonic clock and infrastructure; no production capacity or deployment claim'}
 if($bindings.nativeArchitecture -cne $configuration.architecture){throw 'Native architecture does not match requested qualification'}
+if ($configuration.captureMixedCpuBreakdown) {
+ $bindings.processCpuTicksPerSecond = [int](& getconf CLK_TCK)
+ if ($LASTEXITCODE -ne 0 -or $bindings.processCpuTicksPerSecond -le 0) { throw 'Cannot identify Linux process CPU tick units' }
+}
 $bindings|ConvertTo-Json -Depth 8|Set-Content "$out/bindings.json" -Encoding utf8NoBOM
 if($bindings.gcEnvironment.Count){throw 'Default-GC qualification requires no external GC environment overrides; retained bindings identify the conflicting settings'}
 Remove-Item Env:DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
@@ -189,12 +193,19 @@ try{
      $tcpSampler=Start-Owned "$id-tcp" '/bin/sh' @('-c',$sampleScript,'pressure-tcp',$tcpStop,$ssExecutable)
     }
     Save-Metrics "$out/$id-before.prometheus"
+    $sampleCpu = $configuration.captureMixedCpuBreakdown -and $case.id -in @('cancel-after-usage','audio-8MiB-c4')
+    if ($sampleCpu) {
+     Get-Content -Raw -LiteralPath "/proc/$($hostOwned.Process.Id)/stat" | Set-Content -NoNewline -LiteralPath "$out/$id-proc-stat-before.txt"
+    }
     [void](Read-Json "http://127.0.0.1:18084/begin?id=$id" "$out/$id-server-begin.json" $true)
     $client=Start-Owned $id $configuration.clientDotnet @($configuration.workload,'--run',"$out/$id.configuration.json");$clientFailure=$null
     try{Finish-Owned $client 600}catch{$clientFailure=$_}finally{
      try{[void](Read-Json "http://127.0.0.1:18084/end?id=$id" "$out/$id-server-end.json" $true)}finally{
       if($tcpSampler){[IO.File]::WriteAllText($tcpStop,'stop');Finish-Owned $tcpSampler 10}
      }
+    }
+    if ($sampleCpu) {
+     Get-Content -Raw -LiteralPath "/proc/$($hostOwned.Process.Id)/stat" | Set-Content -NoNewline -LiteralPath "$out/$id-proc-stat-after.txt"
     }
     $report=Get-Content -Raw "$out/$id.stdout.log"|ConvertFrom-Json
     $known=$false;$diagnosticDeadline=$false
