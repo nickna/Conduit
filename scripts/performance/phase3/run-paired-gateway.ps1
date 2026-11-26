@@ -9,10 +9,15 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [switch]$SameRevisionControl,
       [ValidateSet(0,100,1000,10000)][int]$IsolatedStandardChunks=0,
       [switch]$ExcludeIsolatedStandardCases,
-      [switch]$InterleavedControl)
+      [switch]$InterleavedControl,
+      [switch]$PrimaryOnly)
 $ErrorActionPreference='Stop'
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
+if ($PrimaryOnly -and ($Profile -ne 'main' -or !$InterleavedControl)) {
+ throw 'The primary-only diagnostic requires the mixed main profile with interleaved controls'
+}
+$runCore = $Profile -eq 'main' -and !$isolatedStandard -and !$PrimaryOnly
 if ($InterleavedControl -and ($isolatedStandard -or $SameRevisionControl -or
  $ExcludeIsolatedStandardCases -or $Runs -ne 6)) {
  throw 'The interleaved control requires a full profile and six repetitions'
@@ -257,7 +262,7 @@ try{
  }
  $config.infrastructurePrepared=$true;$prepared=$true;$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
  & (Join-Path $qualificationRoot 'run-matched.ps1') -ConfigurationPath $configPath -OutputDirectory (Join-Path $out 'measure') -Stage measure
- if ($Profile -eq 'main' -and !$isolatedStandard) {
+ if ($runCore) {
  # Expand ordinary protocol workloads before evaluating p99 point estimates.
  # Long streams, pressure, cancellation and paced readers remain separately
  # labelled diagnostic distributions; no small sample becomes a release p99 SLO.
@@ -322,7 +327,7 @@ Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--direc
  '--configuration',$configPath,'--catalog',(Join-Path $out 'measure/catalog.source.json'),'--output',(Join-Path $out 'summary.json')) "$out/summarize.log"
 $summary=Get-Content -Raw "$out/summary.json"|ConvertFrom-Json
 $coreSummary=$null
-if ($Profile -eq 'main' -and !$isolatedStandard) {
+if ($runCore) {
  Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--directory',(Join-Path $out 'core-measure'),
   '--configuration',$coreConfigPath,'--catalog',(Join-Path $out 'core-measure/catalog.source.json'),'--output',(Join-Path $out 'core-summary.json')) "$out/core-summarize.log"
  $coreSummary=Get-Content -Raw "$out/core-summary.json"|ConvertFrom-Json
@@ -335,7 +340,7 @@ if($legacyFailures.Count -ne $expectedLegacyFailures -or @($summary.runs|Where-O
 $financialResults=[Collections.Generic.List[object]]::new()
 foreach($definition in $cohortDefinitions){
  $directories=@((Join-Path $out 'measure'))
- if ($Profile -eq 'main' -and !$isolatedStandard) {$directories+=(Join-Path $out 'core-measure')}
+ if ($runCore) {$directories+=(Join-Path $out 'core-measure')}
  $expectation=[ordered]@{schemaVersion=1;cohort=$definition.id;postgresDatabase="phase2_$($definition.id)";redisDatabase=$definition.db;
   seedBalance='100.00000000';seedSpent='0.00000000';seedCredits='100.00000000';chatCost='0.00007500';audioCost='0.00125000';
   beforeUsageCancellationState='settled-bounded-estimate';knownResponsesFailure=$definition.known;sourceSha=$definition.sha;
