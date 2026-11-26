@@ -250,7 +250,11 @@ namespace ConduitLLM.Benchmarks.Messaging
             finally
             {
                 try { await host.StopAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false); }
-                catch (Exception error) { failure = $"Host stop failed: {error.GetType().Name}: {error.Message}"; }
+                catch (Exception error)
+                {
+                    var stopFailure = $"Host stop failed: {error.GetType().Name}: {error.Message}";
+                    failure = failure is null ? stopFailure : $"{failure} {stopFailure}";
+                }
             }
             var measurement = collector.Snapshot();
             warmup ??= measurement;
@@ -265,7 +269,7 @@ namespace ConduitLLM.Benchmarks.Messaging
                 records.Length > 0 ? Rate(records.Max(d => d.FinishedTicks)) : 0,
                 records.Length > 0 ? Rate(records.Max(d => d.SettlementObservedTicks)) : 0,
                 elapsedSeconds, Percentile(.50), Percentile(.95), Percentile(.99),
-                options.OfferedRate == 0 && measurement.StoreSamples.Count(s => s.Ready >= batch) >= 3,
+                options.OfferedRate <= 0 && measurement.StoreSamples.Count(s => s.Ready >= batch) >= 3,
                 rtt, warmup, measurement, failure, setup);
         }
 
@@ -304,7 +308,10 @@ namespace ConduitLLM.Benchmarks.Messaging
                 if (sampling is not null)
                 {
                     try { await sampling.ConfigureAwait(false); }
-                    catch (OperationCanceledException) when (phase.IsCancellationRequested) { }
+                    catch (OperationCanceledException) when (phase.IsCancellationRequested)
+                    {
+                        // Shutdown cancels the sampler after the phase has produced its result.
+                    }
                 }
             }
         }
