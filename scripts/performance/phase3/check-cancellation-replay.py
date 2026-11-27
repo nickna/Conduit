@@ -68,27 +68,37 @@ def evaluate(evidence):
     require(expected == [(row["run"], row["cohort"], row["case"]) for row in manifest],
             "The actual mixed workload history or arm order differs")
 
-    rows = [row for row in summary["runs"] if row["case"] == CASE and row["run"] in FOCUS]
-    require(len(rows) == 12 and all(row["validated"] == 10 and row["kind"] == "cancellation-scenario"
-                                    for row in rows), "Cancellation scope or sample size differs")
-    stats = {}
+    rows = [row for row in summary["runs"] if row["case"] == CASE]
+    focus_rows = [row for row in rows if row["run"] in FOCUS]
+    require(len(rows) == 18 and len(focus_rows) == 12
+            and all(row["validated"] == 10 and row["kind"] == "cancellation-scenario" for row in rows),
+            "Cancellation scope or sample size differs")
+    stats, focus_stats = {}, {}
     for before, after in CONTROLS + CANDIDATES:
-        comparison = compare_runs([row for row in rows if row["cohort"] == before],
-                                  [row for row in rows if row["cohort"] == after])
-        metric = comparison["metrics"][CPU]
-        require(metric["pairs"] == 4 and metric["workingThreshold"] == 1.05
-                and metric["status"] in ("within-working-threshold", "outside-working-threshold"),
-                "Paired evidence or retained CPU budget differs")
-        stats[(before, after)] = metric
-    if any(stats[pair]["status"] == "outside-working-threshold" for pair in CONTROLS):
+        for sample, expected_pairs, output in ((rows, 6, stats), (focus_rows, 4, focus_stats)):
+            comparison = compare_runs([row for row in sample if row["cohort"] == before],
+                                      [row for row in sample if row["cohort"] == after])
+            metric = comparison["metrics"][CPU]
+            require(metric["pairs"] == expected_pairs and metric["workingThreshold"] == 1.05,
+                    "Paired evidence or retained CPU budget differs")
+            output[(before, after)] = metric
+    require(all(metric["status"] in ("within-working-threshold", "outside-working-threshold")
+                for metric in stats.values()), "The full replay did not qualify for CPU budget evaluation")
+    if any(stats[pair]["status"] == "outside-working-threshold"
+           or focus_stats[pair]["medianPairedRatio"] > 1.05 for pair in CONTROLS):
         result = "inconclusive-control"
+    elif all(stats[pair]["status"] == "outside-working-threshold"
+             and focus_stats[pair]["medianPairedRatio"] > 1.05 for pair in CANDIDATES):
+        result = "overage-reproduced"
+    elif all(stats[pair]["status"] == "within-working-threshold"
+             and focus_stats[pair]["medianPairedRatio"] <= 1.05 for pair in CANDIDATES):
+        result = "within-budget"
     else:
-        misses = sum(stats[pair]["status"] == "outside-working-threshold" for pair in CANDIDATES)
-        result = ("within-budget", "reference-dependent", "overage-reproduced")[misses]
+        result = "reference-or-repetition-dependent"
 
     return {
         "classification": result,
-        "scope": "Before-usage cancellation CPU in repetitions 3–6 of the calibrated mixed primary profile.",
+        "scope": "Budget evaluation uses all six repetitions. Repetitions 3–6 are retained as the descriptive target subset.",
         "candidateRevision": state["candidateRevision"],
         "baselineRevision": state["baselineRevision"],
         "validatedWindows": len(manifest),
@@ -96,6 +106,7 @@ def evaluate(evidence):
         "armOrders": orders,
         "cpuPlacement": config["cpuPlacement"],
         "cpuComparisons": {f"{left}->{right}": metric for (left, right), metric in stats.items()},
+        "focusCpuComparisons": {f"{left}->{right}": metric for (left, right), metric in focus_stats.items()},
         "cpuMillisecondsPerValidatedCancellation": [
             {"run": row["run"], "arm": row["cohort"], "cpuMs": row["metrics"][CPU],
              "disconnectP95Ms": row["metrics"]["cancellationToProviderObservedP95Milliseconds"]}

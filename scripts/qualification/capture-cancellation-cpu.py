@@ -14,9 +14,10 @@ def wait_for_ack(process, fd):
         if process.poll() is not None:
             raise RuntimeError(f"perf exited before enabling events ({process.returncode})")
         if select.select([fd], [], [], 0.2)[0]:
-            if os.read(fd, 128).strip() == b"ack":
+            response = os.read(fd, 128)
+            if response.strip(b"\0\t\r\n ") == b"ack":
                 return
-            raise RuntimeError("Unexpected perf control receipt")
+            raise RuntimeError(f"Unexpected perf control receipt: {response!r}")
     raise TimeoutError("perf did not acknowledge enable")
 
 
@@ -56,8 +57,8 @@ def record(perf, pid, prefix):
         os.close(ack)
         for key in ("ctl", "ack"):
             paths[key].unlink(missing_ok=True)
-
-    subprocess.run(["sudo", "-n", "chmod", "0644", paths["data"]], check=True)
+        if paths["data"].is_file():
+            subprocess.run(["sudo", "-n", "chmod", "0644", paths["data"]], check=True)
     symbol_map = Path(f"/tmp/perf-{pid}.map")
     if not symbol_map.is_file() or not symbol_map.stat().st_size:
         raise RuntimeError(f"Missing managed perf map for owned Gateway PID {pid}")
