@@ -34,7 +34,7 @@ jobs:
         run: |
           sudo apt-get update -o Acquire::Retries=3
           sudo apt-get install -y --no-install-recommends linux-tools-generic
-          perf_binary=$(find /usr/lib/linux-tools -path '*/perf' -type f | sort -V | tail -1)
+          perf_binary=$(find -L /usr/lib/linux-tools* -path '*/perf' -type f | sort -V | tail -1)
           test -x "$perf_binary"
           "$perf_binary" --version
           prefix="$RUNNER_TEMP/perf-preflight"
