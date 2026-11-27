@@ -243,6 +243,17 @@ if($Profile -eq 'main'){
     $case.requests, $case.warmupRequests = $sampleCounts[$case.id]
    }
   }
+  # Retain the original ten cancellations and measure the longer sample immediately afterwards.
+  $mainCatalog.cases = @(foreach ($original in $mainCatalog.cases) {
+   $original
+   if ($original.id -ceq 'cancel-before-usage') {
+    $warmReplay = $original | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+    $warmReplay.id = 'cancel-primer-usage'
+    $warmReplay.warmupRequests = 40
+    $warmReplay.requests = 60
+    $warmReplay
+   }
+  })
  }
  if ($isolatedStandard) {
   $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -ceq "standard-$IsolatedStandardChunks")
@@ -254,6 +265,9 @@ if($Profile -eq 'main'){
   }[$IsolatedStandardChunks]
   if ($CalibrateControl -and $IsolatedStandardChunks -eq 100) {
    $sampleCounts = @{requests = 600; warmups = 80}
+  }
+  if ($CalibrateControl -and $IsolatedStandardChunks -eq 1000) {
+   $sampleCounts = @{requests = 480; warmups = 80}
   }
   $mainCatalog.cases[0].requests = $sampleCounts.requests
   $mainCatalog.cases[0].warmupRequests = $sampleCounts.warmups
