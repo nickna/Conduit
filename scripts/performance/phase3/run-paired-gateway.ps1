@@ -11,7 +11,8 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [switch]$ExcludeIsolatedStandardCases,
       [switch]$InterleavedControl,
       [switch]$CalibrateControl,
-      [switch]$CancelBeforeUsageReplay)
+      [switch]$CancelBeforeUsageReplay,
+      [string]$CancellationPerf)
 $ErrorActionPreference='Stop'
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
@@ -19,6 +20,8 @@ if ($CancelBeforeUsageReplay -and (!$CalibrateControl -or !$InterleavedControl -
     $Runs -ne 6 -or $Architecture -ne 'X64')) {
  throw 'The cancellation replay requires the calibrated six-repeat amd64 mixed profile'
 }
+if ($CancellationPerf -and (!$CancelBeforeUsageReplay -or !([IO.Path]::IsPathFullyQualified($CancellationPerf)) -or
+    !(Test-Path -LiteralPath $CancellationPerf -PathType Leaf))) { throw 'Require an absolute perf executable path for the separate cancellation trace' }
 $includeCore = $Profile -eq 'main' -and !$isolatedStandard -and !$CancelBeforeUsageReplay
 $repetitions = if ($Profile -eq 'pressure' -and $CalibrateControl) { 12 } else { 6 }
 if ($CalibrateControl -and !$threeArms) {
@@ -296,6 +299,7 @@ if ($cpuPlacement) { $config.cpuPlacement = $cpuPlacement }
 if ($CancelBeforeUsageReplay) {
  $config.cancelBeforeUsageReplay = [ordered]@{
   focusRuns=@(3, 4, 5, 6)
+  perf=$CancellationPerf
   armOrders=@(
    'fixed,legacy,candidate',
    'candidate,legacy,fixed',

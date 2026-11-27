@@ -187,10 +187,17 @@ try{
    $providerIdentity=Read-Json 'http://127.0.0.1:18083/identity' "$out/$prefix-provider-identity.json"
    $providerHash=(Get-FileHash -LiteralPath $configuration.provider -Algorithm SHA256).Hash.ToLowerInvariant()
    if($configuration.providerObservationVersion -ne 2 -or $providerIdentity.providerObservationVersion -ne 2 -or $providerIdentity.processId -ne $provider.Process.Id -or $providerIdentity.actualRuntime -cne '10.0.15' -or $providerIdentity.architecture -cne $configuration.architecture -or $providerIdentity.sourceSdk -cne '10.0.404' -or $providerIdentity.assemblySha256 -cne $providerHash){throw 'Fixed ProviderV2 identity/runtime/compiler/binary differs'}
-   if ($cpuPlacement) {
-    $hostOwned = Start-Owned "$prefix-gateway" $taskset @('--cpu-list', $cpuPlacement.gateway, $cohort.dotnet, $cohort.gateway) $true
-   } else {
-    $hostOwned=Start-Owned "$prefix-gateway" $cohort.dotnet @($cohort.gateway) $true
+   $traceCancellation = $configuration.cancelBeforeUsageReplay.perf -and $run -in @(3,4,5,6)
+   $previousPerfMap = $env:DOTNET_PerfMapEnabled
+   try {
+    if ($traceCancellation) { $env:DOTNET_PerfMapEnabled = '3' }
+    if ($cpuPlacement) {
+     $hostOwned = Start-Owned "$prefix-gateway" $taskset @('--cpu-list', $cpuPlacement.gateway, $cohort.dotnet, $cohort.gateway) $true
+    } else {
+     $hostOwned=Start-Owned "$prefix-gateway" $cohort.dotnet @($cohort.gateway) $true
+    }
+   } finally {
+    if ($traceCancellation) { $env:DOTNET_PerfMapEnabled = $previousPerfMap }
    }
    $ready=Await-Ready 'http://127.0.0.1:18080/health/ready' $hostOwned 120
    if ($cpuPlacement) {
@@ -228,11 +235,33 @@ try{
      $tcpSampler=Start-Owned "$id-tcp" '/bin/sh' @('-c',$sampleScript,'pressure-tcp',$tcpStop,$ssExecutable)
     }
     Save-Metrics "$out/$id-before.prometheus"
-    [void](Read-Json "http://127.0.0.1:18084/begin?id=$id" "$out/$id-server-begin.json" $true)
-    $client=Start-Owned $id $configuration.clientDotnet @($configuration.workload,'--run',"$out/$id.configuration.json");$clientFailure=$null
-    try{Finish-Owned $client 600}catch{$clientFailure=$_}finally{
-     try{[void](Read-Json "http://127.0.0.1:18084/end?id=$id" "$out/$id-server-end.json" $true)}finally{
-      if($tcpSampler){[IO.File]::WriteAllText($tcpStop,'stop');Finish-Owned $tcpSampler 10}
+    $cpuSampler = $null
+    $tracePrefix = "$out/$id-cpu-trace"
+    $python = $null
+    try {
+     if ($traceCancellation -and $case.id -ceq 'cancel-before-usage') {
+      $python = (Get-Command python3 -CommandType Application | Select-Object -First 1).Source
+      $cpuSampler = Start-Owned "$id-cpu-sampler" $python @(
+       (Join-Path $PSScriptRoot 'capture-cancellation-cpu.py'), $configuration.cancelBeforeUsageReplay.perf,
+       ([string]$hostOwned.Process.Id), $tracePrefix)
+      $deadline = [DateTime]::UtcNow.AddSeconds(20)
+      while (!(Test-Path -LiteralPath "$tracePrefix.ready")) {
+       if ($cpuSampler.Process.HasExited) { Finish-Owned $cpuSampler 1 }
+       if ([DateTime]::UtcNow -ge $deadline) { throw "CPU sampler did not attach for $id" }
+       Start-Sleep -Milliseconds 50
+      }
+     }
+     [void](Read-Json "http://127.0.0.1:18084/begin?id=$id" "$out/$id-server-begin.json" $true)
+     $client=Start-Owned $id $configuration.clientDotnet @($configuration.workload,'--run',"$out/$id.configuration.json");$clientFailure=$null
+     try{Finish-Owned $client 600}catch{$clientFailure=$_}finally{
+      try{[void](Read-Json "http://127.0.0.1:18084/end?id=$id" "$out/$id-server-end.json" $true)}finally{
+       if($tcpSampler){[IO.File]::WriteAllText($tcpStop,'stop');Finish-Owned $tcpSampler 10}
+      }
+     }
+    } finally {
+     if ($cpuSampler) {
+      [IO.File]::WriteAllText("$tracePrefix.stop", 'stop')
+      Finish-Owned $cpuSampler 35
      }
     }
     $report=Get-Content -Raw "$out/$id.stdout.log"|ConvertFrom-Json

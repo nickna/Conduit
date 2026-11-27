@@ -1,14 +1,14 @@
-name: PR 1778 matched cancellation replay
+name: PR 1778 cancellation CPU trace
 
 on:
   push:
-    branches: [codex/pr1778-cancel-order]
+    branches: [codex/pr1778-cancel-trace]
 
 permissions:
   contents: read
 
 jobs:
-  cancellation-timing:
+  cancellation-profile:
     runs-on: ubuntu-24.04
     timeout-minutes: 125
     env:
@@ -29,27 +29,58 @@ jobs:
       - name: Validate frozen fixture bytes
         shell: pwsh
         run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/frozen-inputs.json'
-      - name: Replay original mixed history with independent binary order
+      - name: Install and verify native process-scoped CPU sampling
+        shell: bash
+        run: |
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends linux-tools-generic
+          perf_binary=$(find /usr/lib/linux-tools -path '*/perf' -type f | sort -V | tail -1)
+          test -x "$perf_binary"
+          "$perf_binary" --version
+          prefix="$RUNNER_TEMP/perf-preflight"
+          DOTNET_PerfMapEnabled=3 pwsh -NoLogo -NoProfile -Command '$clock=[Diagnostics.Stopwatch]::StartNew(); while ($clock.Elapsed.TotalSeconds -lt 35) { [void][Math]::Sqrt(13) }' >"$prefix.target.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          sleep 2
+          python3 scripts/qualification/capture-cancellation-cpu.py "$perf_binary" "$pid" "$prefix" &
+          recorder=$!
+          for attempt in $(seq 1 120); do
+            test -f "$prefix.ready" && break
+            kill -0 "$recorder" 2>/dev/null || break
+            sleep 0.1
+          done
+          test -f "$prefix.ready"
+          sleep 2
+          touch "$prefix.stop"
+          wait "$recorder"
+          test -s "$prefix.stacks.txt"
+          printf 'CANCELLATION_PERF=%s\n' "$perf_binary" >> "$GITHUB_ENV"
+      - name: Trace the before-usage windows in a separate replay
         shell: pwsh
         run: >-
           ./scripts/performance/phase3/run-paired-gateway.ps1
           -CandidateRevision $env:CANDIDATE_REVISION -BaselineRevision $env:BASELINE_REVISION
           -Architecture X64 -Runs 6 -InterleavedControl -CalibrateControl -CancelBeforeUsageReplay
-          -OutputDirectory '${{ runner.temp }}/cancellation-timing'
-      - name: Evaluate before-usage CPU budget in repetitions 3 through 6
-        run: python scripts/performance/phase3/check-cancellation-replay.py '${{ runner.temp }}/cancellation-timing'
-      - name: Retain comparison and financial evidence
+          -CancellationPerf $env:CANCELLATION_PERF
+          -OutputDirectory '${{ runner.temp }}/cancellation-trace'
+      - name: Verify all twelve native CPU captures
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/cancellation-trace/measure"
+          test "$(find "$evidence" -maxdepth 1 -name '*-cpu-trace.stacks.txt' -size +0c | wc -l)" -eq 12
+      - name: Retain native traces and benchmark context
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: amd64-cancellation-replay
+          name: amd64-cancellation-cpu-traces
           path: |
             ${{ runner.temp }}/frozen-inputs.json
-            ${{ runner.temp }}/cancellation-timing
-            !${{ runner.temp }}/cancellation-timing/work/fixed/**
-            !${{ runner.temp }}/cancellation-timing/work/legacy/**
-            !${{ runner.temp }}/cancellation-timing/work/candidate/**
-            !${{ runner.temp }}/cancellation-timing/work/seed-source/**
+            ${{ runner.temp }}/perf-preflight.*
+            ${{ runner.temp }}/cancellation-trace
+            !${{ runner.temp }}/cancellation-trace/work/fixed/**
+            !${{ runner.temp }}/cancellation-trace/work/legacy/**
+            !${{ runner.temp }}/cancellation-trace/work/candidate/**
+            !${{ runner.temp }}/cancellation-trace/work/seed-source/**
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 30

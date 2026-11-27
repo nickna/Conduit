@@ -34,6 +34,7 @@ def evaluate(evidence):
     state = read(evidence / "qualification-state.json")
     summary = read(evidence / "summary.json")
     schedule = config["cancelBeforeUsageReplay"]
+    require(not schedule.get("perf"), "An instrumented run cannot qualify the CPU comparison")
     orders = schedule["armOrders"]
     require(tuple(schedule["focusRuns"]) == FOCUS and set(orders) == set(PRIOR_ORDERS)
             and len(orders) == 6, "Incomplete balanced replay schedule")
