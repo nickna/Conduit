@@ -10,10 +10,16 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [ValidateSet(0,100,1000,10000)][int]$IsolatedStandardChunks=0,
       [switch]$ExcludeIsolatedStandardCases,
       [switch]$InterleavedControl,
-      [switch]$CalibrateControl)
+      [switch]$CalibrateControl,
+      [switch]$CancelBeforeUsageReplay)
 $ErrorActionPreference='Stop'
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
+if ($CancelBeforeUsageReplay -and (!$CalibrateControl -or !$InterleavedControl -or $Profile -ne 'main' -or
+    $Runs -ne 6 -or $Architecture -ne 'X64')) {
+ throw 'The cancellation replay requires the calibrated six-repeat amd64 mixed profile'
+}
+$includeCore = $Profile -eq 'main' -and !$isolatedStandard -and !$CancelBeforeUsageReplay
 $repetitions = if ($Profile -eq 'pressure' -and $CalibrateControl) { 12 } else { 6 }
 if ($CalibrateControl -and !$threeArms) {
  throw 'Calibration requires a byte-identical control'
@@ -287,6 +293,19 @@ if ($InterleavedControl) {
  $config.scope = "Full Gateway $Profile workloads on one native runner with three balanced .NET 11 arms. The legacy arm copies the baseline binaries and has separate seeded fixture state."
 }
 if ($cpuPlacement) { $config.cpuPlacement = $cpuPlacement }
+if ($CancelBeforeUsageReplay) {
+ $config.cancelBeforeUsageReplay = [ordered]@{
+  focusRuns=@(3, 4, 5, 6)
+  armOrders=@(
+   'fixed,legacy,candidate',
+   'candidate,legacy,fixed',
+   'legacy,fixed,candidate',
+   'candidate,fixed,legacy',
+   'legacy,candidate,fixed',
+   'fixed,candidate,legacy'
+  )
+ }
+}
 $configPath=Join-Path $out 'configuration.json';$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
 $before=Invoke-Docker @('ps','-aq');$before|Set-Content "$out/outside-containers-before.txt" -Encoding utf8NoBOM
 try{
@@ -308,7 +327,7 @@ try{
  }
  $config.infrastructurePrepared=$true;$prepared=$true;$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
  Invoke-MatchedStage $configPath (Join-Path $out 'measure') 'measure'
- if ($Profile -eq 'main' -and !$isolatedStandard) {
+ if ($includeCore) {
  # Expand ordinary protocol workloads before evaluating p99 point estimates.
  # Long streams, pressure, cancellation and paced readers remain separately
  # labelled diagnostic distributions; no small sample becomes a release p99 SLO.
@@ -373,7 +392,7 @@ Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--direc
  '--configuration',$configPath,'--catalog',(Join-Path $out 'measure/catalog.source.json'),'--output',(Join-Path $out 'summary.json')) "$out/summarize.log"
 $summary=Get-Content -Raw "$out/summary.json"|ConvertFrom-Json
 $coreSummary=$null
-if ($Profile -eq 'main' -and !$isolatedStandard) {
+if ($includeCore) {
  Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--directory',(Join-Path $out 'core-measure'),
   '--configuration',$coreConfigPath,'--catalog',(Join-Path $out 'core-measure/catalog.source.json'),'--output',(Join-Path $out 'core-summary.json')) "$out/core-summarize.log"
  $coreSummary=Get-Content -Raw "$out/core-summary.json"|ConvertFrom-Json
@@ -386,7 +405,7 @@ if($legacyFailures.Count -ne $expectedLegacyFailures -or @($summary.runs|Where-O
 $financialResults=[Collections.Generic.List[object]]::new()
 foreach($definition in $cohortDefinitions){
  $directories=@((Join-Path $out 'measure'))
- if ($Profile -eq 'main' -and !$isolatedStandard) {$directories+=(Join-Path $out 'core-measure')}
+ if ($includeCore) {$directories+=(Join-Path $out 'core-measure')}
  $expectation=[ordered]@{schemaVersion=1;cohort=$definition.id;postgresDatabase="phase2_$($definition.id)";redisDatabase=$definition.db;
   seedBalance='100.00000000';seedSpent='0.00000000';seedCredits='100.00000000';chatCost='0.00007500';audioCost='0.00125000';
   beforeUsageCancellationState='settled-bounded-estimate';knownResponsesFailure=$definition.known;sourceSha=$definition.sha;

@@ -89,6 +89,19 @@ $threeArms = $isolatedStandard -or $configuration.interleavedControl
 if ($threeArms -and ($cohorts.Count -ne 3 -or ($configuration.runs -ne 6 -and !$extendedPressure))) {
  throw 'Invalid interleaved cohort or repetition inventory'
 }
+if ($configuration.cancelBeforeUsageReplay) {
+ $armOrders = @($configuration.cancelBeforeUsageReplay.armOrders)
+ if (!$configuration.cpuPlacement -or !$configuration.interleavedControl -or $configuration.profile -cne 'phase0' -or
+     $configuration.runs -ne 6 -or $armOrders.Count -ne 6 -or ($armOrders | Sort-Object -Unique).Count -ne 6) {
+  throw 'Invalid cancellation replay schedule'
+ }
+ foreach ($row in $armOrders) {
+  $ids = @($row -csplit ',')
+  if ($ids.Count -ne 3 -or (Compare-Object $ids $cohorts.id -CaseSensitive)) {
+   throw 'Cancellation replay requires six distinct permutations of the same three cohorts'
+  }
+ }
+}
 if ($isolatedStandard -and ($cases.Count -ne 1 -or $cases[0].id -cnotin @('standard-100','standard-1000','standard-10000') -or
   $cases[0].endpoint -cne 'standard-sse')) {
  throw 'Expected three cohorts, six repetitions and one standard SSE case'
@@ -156,6 +169,9 @@ try{
    $first = [int][Math]::Floor(($run - 1) / 2)
    $direction = if ($run % 2 -eq 1) { 1 } else { 2 }
    $order = @(0..2 | ForEach-Object { $cohorts[($first + $direction * $_) % 3] })
+  }
+  if ($configuration.cancelBeforeUsageReplay) {
+   $order = @(foreach ($id in $armOrders[$run - 1] -csplit ',') { $cohorts | Where-Object id -ceq $id })
   }
   foreach($cohort in $order){
    # Cohort prefixes identify artifacts/control windows only. User/provider
