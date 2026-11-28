@@ -356,7 +356,7 @@ internal static class AudioTimingProbe
     {
         _listener = new ActivityListener
         {
-            ShouldListenTo = source => source.Name is "Microsoft.AspNetCore" or "System.Net.Http" or "ConduitLLM.Providers",
+            ShouldListenTo = source => source.Name is "Microsoft.AspNetCore" or "System.Net.Http" or "ConduitLLM.Providers" or "Conduit.Pr1778.Audio",
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
             SampleUsingParentId = (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData,
             ActivityStarted = activity => activity.SetCustomProperty("pr1778-audio-start", Stopwatch.GetTimestamp()),

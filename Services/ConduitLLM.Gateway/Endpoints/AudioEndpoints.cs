@@ -14,6 +14,13 @@ namespace ConduitLLM.Gateway.Endpoints
     /// </summary>
     public class AudioEndpoints : GatewayEndpointHandlerBase
     {
+        private static readonly System.Diagnostics.ActivitySource UploadTiming = new("Conduit.Pr1778.Audio");
+        private static void MarkAudioPhase(string stage)
+        {
+            if (!UploadTiming.HasListeners()) return;
+            using var span = UploadTiming.StartActivity(stage);
+        }
+
         private readonly ILLMClientFactory _clientFactory;
         private readonly IModelProviderMappingService _modelMappingService;
         private readonly ILogger<AudioEndpoints> _logger;
@@ -45,6 +52,7 @@ namespace ConduitLLM.Gateway.Endpoints
             bool? stream = null,
             CancellationToken cancellationToken = default)
         {
+            MarkAudioPhase("form-bound");
             if (file == null || file.Length == 0)
                 return OpenAIError(400, "An audio file is required.", "invalid_request");
             if (string.IsNullOrEmpty(model))
@@ -62,12 +70,15 @@ namespace ConduitLLM.Gateway.Endpoints
             if (stt == null)
                 return OpenAIError(400, $"Model {model} does not support speech-to-text transcription.", "unsupported_model");
 
-            var audioData = await ReadAudioDataAsync(file, cancellationToken);
+            MarkAudioPhase("before-file");
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms, cancellationToken);
 
+            MarkAudioPhase("file-read");
             var request = new AudioTranscriptionRequest
             {
                 Model = mapping.ProviderModelId,
-                AudioData = audioData,
+                AudioData = ms.ToArray(),
                 FileName = file.FileName,
                 ContentType = file.ContentType,
                 Language = language,
@@ -81,6 +92,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 TimestampGranularities = ReadFormValues(
                     HttpContext.Request.Form, "timestamp_granularities")
             };
+            MarkAudioPhase("request-built");
             var knownSpeakerReferences =
                 HttpContext.Request.Form.Files.GetFiles("known_speaker_references");
             if (knownSpeakerReferences.Count > 0)
@@ -88,9 +100,11 @@ namespace ConduitLLM.Gateway.Endpoints
                 request.KnownSpeakerReferences = [];
                 foreach (var reference in knownSpeakerReferences)
                 {
+                    using var referenceStream = new MemoryStream();
+                    await reference.CopyToAsync(referenceStream, cancellationToken);
                     request.KnownSpeakerReferences.Add(new AudioTranscriptionReference
                     {
-                        AudioData = await ReadAudioDataAsync(reference, cancellationToken),
+                        AudioData = referenceStream.ToArray(),
                         FileName = reference.FileName,
                         ContentType = reference.ContentType
                     });
@@ -120,14 +134,6 @@ namespace ConduitLLM.Gateway.Endpoints
             if (string.Equals(responseFormat, "text", StringComparison.OrdinalIgnoreCase))
                 return Content(result.Text, "text/plain");
             return Ok(result);
-        }
-
-        private static async Task<byte[]> ReadAudioDataAsync(IFormFile file, CancellationToken cancellationToken)
-        {
-            using var input = file.OpenReadStream();
-            var data = new byte[checked((int)file.Length)];
-            await input.ReadExactlyAsync(data, cancellationToken);
-            return data;
         }
 
         private static System.Text.Json.JsonElement? ParseChunkingStrategy(string? value)
