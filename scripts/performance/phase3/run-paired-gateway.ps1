@@ -12,6 +12,7 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [switch]$InterleavedControl,
       [switch]$CalibrateControl)
 $ErrorActionPreference='Stop'
+$audioTiming = $true
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
 $repetitions = if ($Profile -eq 'pressure' -and $CalibrateControl) { 12 } else { 6 }
@@ -267,6 +268,8 @@ if($Profile -eq 'main'){
   if ($covered.Count -ne $standardCases.Count) { throw 'The isolated standard workload inventory changed' }
   $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -cnotin $standardCases)
  }
+ $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -cin @('audio-1MiB-c4','audio-8MiB-c1','audio-8MiB-c4'))
+ if ($mainCatalog.cases.Count -ne 3) { throw 'Expected three registered audio workloads' }
  $primaryCatalog=Join-Path $out 'main-catalog.json'
  $mainCatalog|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $primaryCatalog -Encoding utf8NoBOM
 }
@@ -288,7 +291,7 @@ if ($isolatedStandard) {
 }
 if ($InterleavedControl) {
  $config.interleavedControl = $true
- $config.scope = "Full Gateway $Profile workloads on one native runner with three balanced .NET 11 arms. The legacy arm copies the baseline binaries and has separate seeded fixture state."
+ $config.scope = "Three audio workloads on one native runner with request timing instrumentation with three balanced .NET 11 arms. The legacy arm copies the baseline binaries and has separate seeded fixture state."
 }
 if ($cpuPlacement) { $config.cpuPlacement = $cpuPlacement }
 $configPath=Join-Path $out 'configuration.json';$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
@@ -312,7 +315,7 @@ try{
  }
  $config.infrastructurePrepared=$true;$prepared=$true;$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
  Invoke-MatchedStage $configPath (Join-Path $out 'measure') 'measure'
- if ($Profile -eq 'main' -and !$isolatedStandard) {
+ if ($Profile -eq 'main' -and !$isolatedStandard -and !$audioTiming) {
  # Expand ordinary protocol workloads before evaluating p99 point estimates.
  # Long streams, pressure, cancellation and paced readers remain separately
  # labelled diagnostic distributions; no small sample becomes a release p99 SLO.
@@ -377,7 +380,7 @@ Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--direc
  '--configuration',$configPath,'--catalog',(Join-Path $out 'measure/catalog.source.json'),'--output',(Join-Path $out 'summary.json')) "$out/summarize.log"
 $summary=Get-Content -Raw "$out/summary.json"|ConvertFrom-Json
 $coreSummary=$null
-if ($Profile -eq 'main' -and !$isolatedStandard) {
+if ($Profile -eq 'main' -and !$isolatedStandard -and !$audioTiming) {
  Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--directory',(Join-Path $out 'core-measure'),
   '--configuration',$coreConfigPath,'--catalog',(Join-Path $out 'core-measure/catalog.source.json'),'--output',(Join-Path $out 'core-summary.json')) "$out/core-summarize.log"
  $coreSummary=Get-Content -Raw "$out/core-summary.json"|ConvertFrom-Json
@@ -390,7 +393,7 @@ if($legacyFailures.Count -ne $expectedLegacyFailures -or @($summary.runs|Where-O
 $financialResults=[Collections.Generic.List[object]]::new()
 foreach($definition in $cohortDefinitions){
  $directories=@((Join-Path $out 'measure'))
- if ($Profile -eq 'main' -and !$isolatedStandard) {$directories+=(Join-Path $out 'core-measure')}
+ if ($Profile -eq 'main' -and !$isolatedStandard -and !$audioTiming) {$directories+=(Join-Path $out 'core-measure')}
  $expectation=[ordered]@{schemaVersion=1;cohort=$definition.id;postgresDatabase="phase2_$($definition.id)";redisDatabase=$definition.db;
   seedBalance='100.00000000';seedSpent='0.00000000';seedCredits='100.00000000';chatCost='0.00007500';audioCost='0.00125000';
   beforeUsageCancellationState='settled-bounded-estimate';knownResponsesFailure=$definition.known;sourceSha=$definition.sha;
