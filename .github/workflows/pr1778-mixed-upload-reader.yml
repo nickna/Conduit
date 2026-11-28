@@ -1,8 +1,8 @@
-name: PR 1778 mixed audio reader comparison
+name: PR 1778 Intel mixed upload timing diagnostic
 
 on:
   push:
-    branches: [codex/pr1778-mixed-upload-reader]
+    branches: [codex/pr1778-mixed-reader-io]
 
 permissions:
   contents: read
@@ -13,16 +13,16 @@ concurrency:
 
 jobs:
   matched:
-    name: Mixed upload reader ${{ matrix.reference }} (X64)
+    name: Intel mixed storage timing ${{ matrix.reference }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - reference: exact-versus-original
+          - reference: exact-versus-pr-base
             candidate: '7327d9e3075992386fa4866c22da68c6db770e7a'
-            revision: '8e0e2372811554a4b4546d892b5a48b197c05b27'
+            revision: '96ffd94da1286becc60404858c948824235bea93'
             runner: ubuntu-24.04
             timeout_minutes: 210
           - reference: buffered-versus-pr-base
@@ -36,6 +36,18 @@ jobs:
       CANDIDATE_REVISION: ${{ matrix.candidate }}
       BASELINE_REVISION: ${{ matrix.revision }}
     steps:
+      - name: Identify the runner for the Intel reproduction
+        id: host
+        shell: bash
+        run: |
+          set -euo pipefail
+          model=$(LC_ALL=C lscpu | sed -n 's/^Model name:[[:space:]]*//p')
+          echo "Allocated processor: $model" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ "$model" != *"6975P-C"* ]]; then
+            echo "The latency regression was observed on 6975P-C. No Intel sample was collected in this slot." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 78
+          fi
+          echo 'matched=true' >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -56,10 +68,10 @@ jobs:
           -Architecture X64 -Profile main -Runs 6 -InterleavedControl -CalibrateControl
           -OutputDirectory '${{ runner.temp }}/phase3-gateway'
       - name: Retain sources, individual measurements and financial evidence
-        if: always()
+        if: always() && steps.host.outputs.matched == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mixed-reader-${{ matrix.reference }}
+          name: mixed-io-${{ matrix.reference }}
           path: |
             ${{ runner.temp }}/phase3-input-integrity.json
             ${{ runner.temp }}/phase3-gateway

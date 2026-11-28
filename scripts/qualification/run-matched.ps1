@@ -214,8 +214,13 @@ try{
     Save-Metrics "$out/$id-before.prometheus"
     [void](Read-Json "http://127.0.0.1:18084/begin?id=$id" "$out/$id-server-begin.json" $true)
     $client=Start-Owned $id $configuration.clientDotnet @($configuration.workload,'--run',"$out/$id.configuration.json");$clientFailure=$null
+    $audioSampler=$null
+    if ($case.id -like 'audio-*') {
+     $audioSampler=Start-Owned "$id-io" '/usr/bin/python3' @((Join-Path $PSScriptRoot 'pr1778-audio-io.py'),"$out/$id-io.json",'normal',$hostOwned.Process.Id,$provider.Process.Id,$client.Process.Id)
+    }
     try{Finish-Owned $client 600}catch{$clientFailure=$_}finally{
      try{[void](Read-Json "http://127.0.0.1:18084/end?id=$id" "$out/$id-server-end.json" $true)}finally{
+      if($audioSampler){Finish-Owned $audioSampler 20}
       if($tcpSampler){[IO.File]::WriteAllText($tcpStop,'stop');Finish-Owned $tcpSampler 10}
      }
     }
