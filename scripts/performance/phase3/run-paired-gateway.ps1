@@ -270,6 +270,7 @@ if($Profile -eq 'main'){
  }
  $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -cin @('audio-1MiB-c4','audio-8MiB-c1','audio-8MiB-c4'))
  if ($mainCatalog.cases.Count -ne 3) { throw 'Expected three registered audio workloads' }
+ foreach ($audioCase in $mainCatalog.cases) { $audioCase.requests *= 4 }
  $primaryCatalog=Join-Path $out 'main-catalog.json'
  $mainCatalog|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $primaryCatalog -Encoding utf8NoBOM
 }
