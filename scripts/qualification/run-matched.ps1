@@ -166,7 +166,11 @@ try{
    # Provider observation IDs are scoped to this fresh process. Logical payload
    # IDs match exactly across runtimes; artifact paths remain cohort-specific.
    # Equal-width but different cohort words change BPE admission estimates.
+   if ($env:PR1778_STORAGE_MODE -ceq 'memory') {
+    $provider=Start-Owned "$prefix-provider" '/usr/bin/env' @("ASPNETCORE_TEMP=$env:PR1778_PROVIDER_TMP",$configuration.clientDotnet,$configuration.provider,'--provider','18083')
+   } else {
    $provider=Start-Owned "$prefix-provider" $configuration.clientDotnet @($configuration.provider,'--provider','18083')
+   }
    [void](Await-Ready 'http://127.0.0.1:18083/health' $provider 30)
    $providerIdentity=Read-Json 'http://127.0.0.1:18083/identity' "$out/$prefix-provider-identity.json"
    $providerHash=(Get-FileHash -LiteralPath $configuration.provider -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -216,7 +220,7 @@ try{
     $client=Start-Owned $id $configuration.clientDotnet @($configuration.workload,'--run',"$out/$id.configuration.json");$clientFailure=$null
     $audioSampler=$null
     if ($case.id -like 'audio-*') {
-     $audioSampler=Start-Owned "$id-io" '/usr/bin/python3' @((Join-Path $PSScriptRoot 'pr1778-audio-io.py'),"$out/$id-io.json",'normal',$hostOwned.Process.Id,$provider.Process.Id,$client.Process.Id)
+     $audioSampler=Start-Owned "$id-io" '/usr/bin/python3' @((Join-Path $PSScriptRoot 'pr1778-audio-io.py'),"$out/$id-io.json",$env:PR1778_STORAGE_MODE,$hostOwned.Process.Id,$provider.Process.Id,$client.Process.Id)
     }
     try{Finish-Owned $client 600}catch{$clientFailure=$_}finally{
      try{[void](Read-Json "http://127.0.0.1:18084/end?id=$id" "$out/$id-server-end.json" $true)}finally{

@@ -12,7 +12,7 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
       [switch]$InterleavedControl,
       [switch]$CalibrateControl)
 $ErrorActionPreference='Stop'
-$primaryOnly = $env:GITHUB_WORKFLOW -ceq 'PR 1778 mixed audio reader comparison'
+$primaryOnly = $env:PR1778_MIXED_PRIMARY_ONLY -ceq '1'
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
 $repetitions = if ($Profile -eq 'pressure' -and $CalibrateControl) { 12 } else { 6 }

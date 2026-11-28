@@ -1,8 +1,8 @@
-name: PR 1778 Intel mixed upload timing diagnostic
+name: PR 1778 mixed provider storage crossover
 
 on:
   push:
-    branches: [codex/pr1778-mixed-reader-io]
+    branches: [codex/pr1778-mixed-provider-temp]
 
 permissions:
   contents: read
@@ -13,28 +13,27 @@ concurrency:
 
 jobs:
   matched:
-    name: Intel mixed storage timing ${{ matrix.reference }}
+    name: Intel mixed provider storage, ${{ matrix.first }} first
     runs-on: ${{ matrix.runner }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - reference: exact-versus-pr-base
-            candidate: '7327d9e3075992386fa4866c22da68c6db770e7a'
-            revision: '96ffd94da1286becc60404858c948824235bea93'
+          - first: memory
+            second: normal
             runner: ubuntu-24.04
-            timeout_minutes: 210
-          - reference: buffered-versus-pr-base
-            candidate: '510dda63d1af136b91e19d116036c68774f99f9c'
-            revision: '96ffd94da1286becc60404858c948824235bea93'
+            timeout_minutes: 230
+          - first: normal
+            second: memory
             runner: ubuntu-24.04
-            timeout_minutes: 210
+            timeout_minutes: 230
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
-      CANDIDATE_REVISION: ${{ matrix.candidate }}
-      BASELINE_REVISION: ${{ matrix.revision }}
+      CANDIDATE_REVISION: '7327d9e3075992386fa4866c22da68c6db770e7a'
+      BASELINE_REVISION: '96ffd94da1286becc60404858c948824235bea93'
+      PR1778_MIXED_PRIMARY_ONLY: '1'
     steps:
       - name: Identify the runner for the Intel reproduction
         id: host
@@ -60,49 +59,93 @@ jobs:
       - name: Verify frozen fixture bytes
         shell: pwsh
         run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-input-integrity.json'
-      - name: Run all matched primary workloads in the original mixed order
-        shell: pwsh
-        run: >-
-          ./scripts/performance/phase3/run-paired-gateway.ps1
-          -CandidateRevision $env:CANDIDATE_REVISION -BaselineRevision $env:BASELINE_REVISION
-          -Architecture X64 -Profile main -Runs 6 -InterleavedControl -CalibrateControl
-          -OutputDirectory '${{ runner.temp }}/phase3-gateway'
-      - name: Retain sources, individual measurements and financial evidence
-        if: always() && steps.host.outputs.matched == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mixed-io-${{ matrix.reference }}
-          path: |
-            ${{ runner.temp }}/phase3-input-integrity.json
-            ${{ runner.temp }}/phase3-gateway
-            ${{ runner.temp }}/phase3-queue
-            ${{ runner.temp }}/phase3-queue-policy
-            ${{ runner.temp }}/phase3-micro-inventory-tests
-            !${{ runner.temp }}/phase3-gateway/work/fixed/**
-            !${{ runner.temp }}/phase3-gateway/work/candidate/**
-            !${{ runner.temp }}/phase3-gateway/work/legacy/**
-            !${{ runner.temp }}/phase3-gateway/work/seed-source/**
-            !${{ runner.temp }}/phase3-gateway/*/work/fixed/**
-            !${{ runner.temp }}/phase3-gateway/*/work/candidate/**
-            !${{ runner.temp }}/phase3-gateway/*/work/legacy/**
-            !${{ runner.temp }}/phase3-gateway/*/work/seed-source/**
-          if-no-files-found: error
-          include-hidden-files: true
-          retention-days: 30
-      - name: Evaluate the registered workload budgets
-        shell: pwsh
+      - name: Prepare private temporary storage for the simulated provider
+        shell: bash
         run: |
-          $s = Get-Content -Raw '${{ runner.temp }}/phase3-gateway/summary.json' | ConvertFrom-Json
-          if (!$s.collectionValidated -or !$s.allWorkloadsPassed -or $s.runs.Count -ne 414 -or @($s.comparisons | Group-Object case).Count -ne 23) { throw 'Incomplete mixed collection' }
+          set -euo pipefail
+          test -z "${ASPNETCORE_TEMP:-}"
+          test "$(findmnt -n -o FSTYPE -T /dev/shm)" = tmpfs
+          path=$(mktemp -d /dev/shm/pr1778-provider-XXXXXXXX)
+          test "$(df -B1 --output=avail "$path" | tail -1)" -gt 67108864
+          echo "PR1778_PROVIDER_TMP=$path" >> "$GITHUB_ENV"
+          { lscpu; findmnt -T /tmp; findmnt -T "$path"; lsblk; } > "$RUNNER_TEMP/storage-host.txt"
+      - name: Measure first placement with the full mixed history
+        shell: pwsh
+        env:
+          PR1778_STORAGE_MODE: ${{ matrix.first }}
+        run: |
+          $folder = Join-Path $env:RUNNER_TEMP 'first'
+          New-Item -Type Directory -Path $folder | Out-Null
+          Copy-Item "$env:RUNNER_TEMP/storage-host.txt","$env:RUNNER_TEMP/phase3-input-integrity.json" $folder
+          ./scripts/performance/phase3/run-paired-gateway.ps1 -CandidateRevision $env:CANDIDATE_REVISION -BaselineRevision $env:BASELINE_REVISION -Architecture X64 -Profile main -Runs 6 -InterleavedControl -CalibrateControl -OutputDirectory "$folder/phase3-gateway"
+          $s = Get-Content -Raw "$folder/phase3-gateway/summary.json" | ConvertFrom-Json
+          if (!$s.collectionValidated -or !$s.allWorkloadsPassed -or $s.runs.Count -ne 414 -or @($s.comparisons | Group-Object case).Count -ne 23) { throw 'Incomplete mixed evidence' }
           foreach ($g in ($s.comparisons | Group-Object case)) {
             $pairs = @($g.Group | ForEach-Object { "$($_.baseline)->$($_.candidate)" })
             if ($pairs.Count -ne 4 -or (Compare-Object $pairs @('fixed->legacy','legacy->fixed','fixed->candidate','legacy->candidate'))) { throw 'Incomplete paired comparisons' }
           }
-          $failures = @(foreach ($c in $s.comparisons) {
-            if ($c.metrics.serverWindowCpuMillisecondsPerValidated.pairs -ne 6) { throw 'Incomplete CPU pairs' }
-            foreach ($m in $c.metrics.PSObject.Properties) {
-              if ($m.Value.status -eq 'outside-working-threshold') { "$($c.case) $($c.baseline)->$($c.candidate) $($m.Name) $($m.Value.medianPairedRatio)" }
+      - name: Publish first placement receipts
+        if: always() && steps.host.outputs.matched == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mixed-temp-${{ matrix.first }}-first-first-${{ matrix.first }}
+          path: |
+            ${{ runner.temp }}/first/storage-host.txt
+            ${{ runner.temp }}/first/phase3-input-integrity.json
+            ${{ runner.temp }}/first/phase3-gateway
+            !${{ runner.temp }}/first/phase3-gateway/work/fixed/**
+            !${{ runner.temp }}/first/phase3-gateway/work/candidate/**
+            !${{ runner.temp }}/first/phase3-gateway/work/legacy/**
+            !${{ runner.temp }}/first/phase3-gateway/work/seed-source/**
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: true
+      - name: Measure second placement with the full mixed history
+        shell: pwsh
+        env:
+          PR1778_STORAGE_MODE: ${{ matrix.second }}
+        run: |
+          $folder = Join-Path $env:RUNNER_TEMP 'second'
+          New-Item -Type Directory -Path $folder | Out-Null
+          Copy-Item "$env:RUNNER_TEMP/storage-host.txt","$env:RUNNER_TEMP/phase3-input-integrity.json" $folder
+          ./scripts/performance/phase3/run-paired-gateway.ps1 -CandidateRevision $env:CANDIDATE_REVISION -BaselineRevision $env:BASELINE_REVISION -Architecture X64 -Profile main -Runs 6 -InterleavedControl -CalibrateControl -OutputDirectory "$folder/phase3-gateway"
+          $s = Get-Content -Raw "$folder/phase3-gateway/summary.json" | ConvertFrom-Json
+          if (!$s.collectionValidated -or !$s.allWorkloadsPassed -or $s.runs.Count -ne 414 -or @($s.comparisons | Group-Object case).Count -ne 23) { throw 'Incomplete mixed evidence' }
+          foreach ($g in ($s.comparisons | Group-Object case)) {
+            $pairs = @($g.Group | ForEach-Object { "$($_.baseline)->$($_.candidate)" })
+            if ($pairs.Count -ne 4 -or (Compare-Object $pairs @('fixed->legacy','legacy->fixed','fixed->candidate','legacy->candidate'))) { throw 'Incomplete paired comparisons' }
+          }
+      - name: Publish second placement receipts
+        if: always() && steps.host.outputs.matched == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mixed-temp-${{ matrix.first }}-first-second-${{ matrix.second }}
+          path: |
+            ${{ runner.temp }}/second/storage-host.txt
+            ${{ runner.temp }}/second/phase3-input-integrity.json
+            ${{ runner.temp }}/second/phase3-gateway
+            !${{ runner.temp }}/second/phase3-gateway/work/fixed/**
+            !${{ runner.temp }}/second/phase3-gateway/work/candidate/**
+            !${{ runner.temp }}/second/phase3-gateway/work/legacy/**
+            !${{ runner.temp }}/second/phase3-gateway/work/seed-source/**
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: true
+      - name: Report every registered budget miss in both placements
+        shell: pwsh
+        run: |
+          $failures = @(foreach($stage in 'first','second') {
+            $s = Get-Content -Raw "$env:RUNNER_TEMP/$stage/phase3-gateway/summary.json" | ConvertFrom-Json
+            foreach ($c in $s.comparisons) {
+              if ($c.metrics.serverWindowCpuMillisecondsPerValidated.pairs -ne 6) { throw 'Missing paired measurements' }
+              foreach ($m in $c.metrics.PSObject.Properties) {
+                if ($m.Value.status -eq 'outside-working-threshold') { "$stage $($c.case) $($c.baseline)->$($c.candidate) $($m.Name) $($m.Value.medianPairedRatio)" }
+              }
             }
           })
           $failures | Write-Output
-          if ($failures.Count) { throw 'An existing workload budget was exceeded in the mixed replay' }
+          if ($failures.Count) { throw 'An existing budget was exceeded' }
+      - name: Remove the empty fixture directory
+        if: always() && env.PR1778_PROVIDER_TMP != ''
+        shell: bash
+        run: rmdir -- "$PR1778_PROVIDER_TMP"
