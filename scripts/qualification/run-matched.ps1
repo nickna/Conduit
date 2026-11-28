@@ -142,6 +142,8 @@ function Await-Ready([string]$url,$owned,[int]$timeout){
  while($true){$response=$null;try{$response=$http.GetAsync($url).GetAwaiter().GetResult();if($response.IsSuccessStatusCode){return $clock.Elapsed.TotalMilliseconds}}catch{}finally{if($response){$response.Dispose()}}
   if($owned.Process.HasExited -or $clock.Elapsed.TotalSeconds -gt $timeout){throw "Readiness failed: $($owned.Name)"};Start-Sleep -Milliseconds 100}
 }
+$audioIo = $env:PR1778_STORAGE_START -cin @('normal','memory')
+if ($audioIo -and (!$replicateMixed -or $cases.Count -ne 5)) { throw 'Storage comparison scope changed' }
 $provider=$null;$hostOwned=$null;$rows=[Collections.Generic.List[object]]::new();$failure=$null
 $expectedLogs=@{}
 foreach($cohort in $cohorts){
@@ -155,6 +157,12 @@ try{
   # Keep each original workload history together on a fresh Gateway in both blocks.
   $mirror = $replicateMixed -and $run -gt 6
   $orderRun = if ($mirror) { 13 - $run } else { $run }
+  if ($audioIo) {
+   $orderRun = 1 + [int][Math]::Floor(($run - 1) / 2)
+   $mirror = $false
+   $memory = (($run % 4) -in @(2,3)) -xor ($env:PR1778_STORAGE_START -ceq 'memory')
+   $storage = if ($memory) { 'memory' } else { 'normal' }
+  }
   $order=if($run%2 -eq 1){@($cohorts)}else{@($cohorts[($cohorts.Count-1)..0])}
   if ($threeArms) {
    # Each block of six repetitions places each cohort in each position twice.
@@ -172,7 +180,11 @@ try{
    # Provider observation IDs are scoped to this fresh process. Logical payload
    # IDs match exactly across runtimes; artifact paths remain cohort-specific.
    # Equal-width but different cohort words change BPE admission estimates.
-   $provider=Start-Owned "$prefix-provider" $configuration.clientDotnet @($configuration.provider,'--provider','18083')
+   if ($audioIo -and $memory) {
+    $provider=Start-Owned "$prefix-provider" '/usr/bin/env' @("ASPNETCORE_TEMP=$env:PR1778_PROVIDER_TMP",$configuration.clientDotnet,$configuration.provider,'--provider','18083')
+   } else {
+    $provider=Start-Owned "$prefix-provider" $configuration.clientDotnet @($configuration.provider,'--provider','18083')
+   }
    [void](Await-Ready 'http://127.0.0.1:18083/health' $provider 30)
    $providerIdentity=Read-Json 'http://127.0.0.1:18083/identity' "$out/$prefix-provider-identity.json"
    $providerHash=(Get-FileHash -LiteralPath $configuration.provider -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -201,6 +213,11 @@ try{
    for($index=0;$index -lt $cases.Count;$index++){
     $case=$cases[($index+$orderRun-1)%$cases.Count];$id="$prefix-$($case.id)"
     $logicalCaseId="$profileName-r$run-$($case.id)"
+    if ($audioIo) {
+     $case = $cases[$index]
+     $id = "$prefix-$($case.id)"
+     $logicalCaseId = "$profileName-r$($run.ToString('D2'))-$($case.id)"
+    }
     $config=[ordered]@{caseId=$logicalCaseId;baseUrl='http://127.0.0.1:18080';providerUrl='http://127.0.0.1:18083';model='native-aot-model'}
     foreach($property in $case.PSObject.Properties){if($property.Name -ne 'id'){$config[$property.Name]=$property.Value}}
     $warmups=[int]$config.warmupRequests;$config.warmupRequests=0
@@ -220,8 +237,13 @@ try{
     Save-Metrics "$out/$id-before.prometheus"
     [void](Read-Json "http://127.0.0.1:18084/begin?id=$id" "$out/$id-server-begin.json" $true)
     $client=Start-Owned $id $configuration.clientDotnet @($configuration.workload,'--run',"$out/$id.configuration.json");$clientFailure=$null
+    $ioSampler=$null
+    if ($audioIo) {
+     $ioSampler=Start-Owned "$id-io" '/usr/bin/python3' @((Join-Path $PSScriptRoot 'pr1778-audio-io.py'),"$out/$id-io.json",$storage,$hostOwned.Process.Id,$provider.Process.Id,$client.Process.Id)
+    }
     try{Finish-Owned $client 600}catch{$clientFailure=$_}finally{
      try{[void](Read-Json "http://127.0.0.1:18084/end?id=$id" "$out/$id-server-end.json" $true)}finally{
+      if($ioSampler){Finish-Owned $ioSampler 20}
       if($tcpSampler){[IO.File]::WriteAllText($tcpStop,'stop');Finish-Owned $tcpSampler 10}
      }
     }

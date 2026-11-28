@@ -1,0 +1,92 @@
+name: PR 1778 audio fixture storage crossover
+
+on:
+  push:
+    branches: [codex/pr1778-audio-fixture-io]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-performance-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  matched:
+    name: Provider storage (${{ matrix.start }} first)
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {arch: X64, runner: ubuntu-24.04, profile: main, timeout_minutes: 120, interleaved_control: true, start: normal}
+          - {arch: X64, runner: ubuntu-24.04, profile: main, timeout_minutes: 120, interleaved_control: true, start: memory}
+    env:
+      PR1778_STORAGE_START: '${{ matrix.start }}'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      CANDIDATE_REVISION: '7327d9e3075992386fa4866c22da68c6db770e7a'
+      BASELINE_REVISION: '96ffd94da1286becc60404858c948824235bea93'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify frozen fixture bytes
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-input-integrity.json'
+      - name: Prepare private memory-backed provider upload directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${ASPNETCORE_TEMP:-}"
+          test "$(findmnt -n -o FSTYPE -T /dev/shm)" = tmpfs
+          path=$(mktemp -d /dev/shm/pr1778-provider-XXXXXXXX)
+          test "$(df -B1 --output=avail "$path" | tail -1)" -gt 67108864
+          echo "PR1778_PROVIDER_TMP=$path" >> "$GITHUB_ENV"
+          { uname -a; lscpu; findmnt -T /tmp; findmnt -T "$path"; lsblk; } > "$RUNNER_TEMP/storage-host.txt"
+      - name: Run paired Gateway protocol and financial workloads
+        if: matrix.profile == 'main' || matrix.profile == 'pressure'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-paired-gateway.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION
+          -BaselineRevision $env:BASELINE_REVISION
+          -Architecture '${{ matrix.arch }}'
+          -Profile '${{ matrix.profile }}'
+          -Runs 12
+          -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -CalibrateControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -OutputDirectory '${{ runner.temp }}/phase3-gateway'
+      - name: Score both placements independently
+        if: success()
+        run: python3 scripts/qualification/pr1778-storage-scores.py "$RUNNER_TEMP/phase3-gateway"
+      - name: Retain sources, individual measurements and financial evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-storage-${{ matrix.start }}-first
+          path: |
+            ${{ runner.temp }}/storage-host.txt
+            ${{ runner.temp }}/phase3-input-integrity.json
+            ${{ runner.temp }}/phase3-gateway
+            ${{ runner.temp }}/phase3-queue
+            ${{ runner.temp }}/phase3-queue-policy
+            ${{ runner.temp }}/phase3-micro-inventory-tests
+            !${{ runner.temp }}/phase3-gateway/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/work/seed-source/**
+            !${{ runner.temp }}/phase3-gateway/*/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/*/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/*/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/*/work/seed-source/**
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30

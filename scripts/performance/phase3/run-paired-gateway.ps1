@@ -192,6 +192,7 @@ $sourceBindings.Add([ordered]@{id='fixed-tools';sourceSdk='10.0.404';files=@(
  }
 )})
 $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindings.json" -Encoding utf8NoBOM
+$audioIo = $env:PR1778_STORAGE_START -cin @('normal','memory')
 $primaryCatalog=Join-Path $qualificationRoot 'pressure-native-catalog.json'
 if ($Profile -eq 'pressure' -and $InterleavedControl) {
  $pressureCatalog = Get-Content -Raw -LiteralPath $primaryCatalog | ConvertFrom-Json
@@ -267,6 +268,18 @@ if($Profile -eq 'main'){
   if ($covered.Count -ne $standardCases.Count) { throw 'The isolated standard workload inventory changed' }
   $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -cnotin $standardCases)
  }
+ if ($audioIo) {
+  if (!$InterleavedControl -or !$CalibrateControl -or $Runs -ne 12) { throw 'Storage comparison requires twelve balanced three-arm repetitions' }
+  $audio = @(foreach ($name in @('audio-1MiB-c1','audio-8MiB-c1','audio-1MiB-c4','audio-8MiB-c4')) {
+   $original = @($mainCatalog.cases | Where-Object id -ceq $name)
+   if ($original.Count -ne 1) { throw "Missing audio workload $name" }
+   $original[0]
+  })
+  $long = $audio[2] | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+  $long.id = 'audio-1MiB-q4'
+  $long.requests = 720
+  $mainCatalog.cases = $audio + @($long)
+ }
  $primaryCatalog=Join-Path $out 'main-catalog.json'
  $mainCatalog|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $primaryCatalog -Encoding utf8NoBOM
 }
@@ -312,7 +325,7 @@ try{
  }
  $config.infrastructurePrepared=$true;$prepared=$true;$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
  Invoke-MatchedStage $configPath (Join-Path $out 'measure') 'measure'
- if ($Profile -eq 'main' -and !$isolatedStandard) {
+ if ($Profile -eq 'main' -and !$isolatedStandard -and !$audioIo) {
  # Expand ordinary protocol workloads before evaluating p99 point estimates.
  # Long streams, pressure, cancellation and paced readers remain separately
  # labelled diagnostic distributions; no small sample becomes a release p99 SLO.
@@ -377,7 +390,7 @@ Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--direc
  '--configuration',$configPath,'--catalog',(Join-Path $out 'measure/catalog.source.json'),'--output',(Join-Path $out 'summary.json')) "$out/summarize.log"
 $summary=Get-Content -Raw "$out/summary.json"|ConvertFrom-Json
 $coreSummary=$null
-if ($Profile -eq 'main' -and !$isolatedStandard) {
+if ($Profile -eq 'main' -and !$isolatedStandard -and !$audioIo) {
  Invoke-Checked 'python' @((Join-Path $qualificationRoot 'summarize.py'),'--directory',(Join-Path $out 'core-measure'),
   '--configuration',$coreConfigPath,'--catalog',(Join-Path $out 'core-measure/catalog.source.json'),'--output',(Join-Path $out 'core-summary.json')) "$out/core-summarize.log"
  $coreSummary=Get-Content -Raw "$out/core-summary.json"|ConvertFrom-Json
@@ -390,7 +403,7 @@ if($legacyFailures.Count -ne $expectedLegacyFailures -or @($summary.runs|Where-O
 $financialResults=[Collections.Generic.List[object]]::new()
 foreach($definition in $cohortDefinitions){
  $directories=@((Join-Path $out 'measure'))
- if ($Profile -eq 'main' -and !$isolatedStandard) {$directories+=(Join-Path $out 'core-measure')}
+ if ($Profile -eq 'main' -and !$isolatedStandard -and !$audioIo) {$directories+=(Join-Path $out 'core-measure')}
  $expectation=[ordered]@{schemaVersion=1;cohort=$definition.id;postgresDatabase="phase2_$($definition.id)";redisDatabase=$definition.db;
   seedBalance='100.00000000';seedSpent='0.00000000';seedCredits='100.00000000';chatCost='0.00007500';audioCost='0.00125000';
   beforeUsageCancellationState='settled-bounded-estimate';knownResponsesFailure=$definition.known;sourceSha=$definition.sha;
