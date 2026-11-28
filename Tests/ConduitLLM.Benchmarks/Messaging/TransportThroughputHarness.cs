@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 
 using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Configuration.Messaging.Wolverine;
@@ -22,7 +23,7 @@ namespace ConduitLLM.Benchmarks.Messaging
 {
     /// <summary>
     /// Measures the sustained delivery throughput the Wolverine PostgreSQL transport can
-    /// support per tuned endpoint, and the publish→handle latency at saturation (#1223).
+    /// support per tuned endpoint, with handler completion and SQL-observed durable settlement.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -57,10 +58,6 @@ namespace ConduitLLM.Benchmarks.Messaging
     /// </remarks>
     internal static class TransportThroughputHarness
     {
-        private const string DefaultAdminConnection =
-            "Host=localhost;Port=5432;Username=conduit;Password=conduitpass;Database=postgres";
-        private const string DefaultBenchDatabase = "conduit_msgbench";
-
         /// <summary>
         /// The queues under test. Each carries the production policy descriptor and the
         /// representative event type used to generate load.
@@ -76,7 +73,7 @@ namespace ConduitLLM.Benchmarks.Messaging
                 {
                     KeyId = 1,
                     Amount = 0.01m,
-                    RequestId = $"bench-{i}",
+                    RequestId = $"bench-{tag}-{i}",
                     CorrelationId = tag,
                 }),
             new QueueTarget(
@@ -126,6 +123,43 @@ namespace ConduitLLM.Benchmarks.Messaging
                 }),
         };
 
+        /// <summary>
+        /// Verifies the published benchmark's dynamic compiler closure without opening a database.
+        /// A normal build can contain dependencies that a publish excludes, so CI runs this
+        /// from the same published directory used by the queue sweep.
+        /// </summary>
+        public static int VerifyRuntimeCompilation()
+        {
+            var options = new WolverineOptions();
+            ConfigureRuntimeCompilation(options);
+            using var services = options.Services.BuildServiceProvider();
+            var compiler = services.GetRequiredService<IAssemblyGenerator>();
+            var assembly = compiler.Generate("""
+                namespace ConduitLLM.Benchmarks.Generated;
+                public static class TransportRuntimeCompilationProbe
+                {
+                    public static int Run() => 6 * 7;
+                }
+                """);
+            var type = assembly.GetType(
+                "ConduitLLM.Benchmarks.Generated.TransportRuntimeCompilationProbe", throwOnError: true)!;
+            var run = type.GetMethod("Run", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                ?? throw new InvalidOperationException("The runtime compiler did not emit the expected probe method.");
+            var value = run.CreateDelegate<Func<int>>()();
+            if (value != 42)
+                throw new InvalidOperationException("The runtime-compiled probe returned an unexpected value.");
+
+            Console.WriteLine($"Runtime compilation smoke passed: mode={options.CodeGeneration.TypeLoadMode}; " +
+                $"compiler={compiler.GetType().Assembly.GetName().Name}; generatedValue={value}.");
+            return 0;
+        }
+
+        private static void ConfigureRuntimeCompilation(WolverineOptions options)
+        {
+            options.CodeGeneration.TypeLoadMode = TypeLoadMode.Dynamic;
+            options.UseRuntimeCompilation();
+        }
+
         public static async Task<int> RunAsync(string[] args)
         {
             var options = HarnessOptions.Parse(args);
@@ -145,31 +179,43 @@ namespace ConduitLLM.Benchmarks.Messaging
                 return 1;
             }
 
-            var connectionString = await EnsureBenchDatabaseAsync(options).ConfigureAwait(false);
-
-            Console.WriteLine(
-                $"# transport-throughput  queue={target.Key}  messages={options.MessageCount}  " +
-                $"handlerCostMs=[{string.Join(",", options.HandlerCostMs)}]  " +
-                $"offered={(options.OfferedRate > 0 ? options.OfferedRate.ToString("F0", CultureInfo.InvariantCulture) + "/s" : "saturate")}");
-            Console.WriteLine($"# policy: {DescribePolicy(target, options)}");
-            Console.WriteLine();
-
-            var results = new List<RunResult>();
-            foreach (var cost in options.HandlerCostMs)
+            if (File.Exists(options.OutputPath))
             {
-                var result = await MeasureAsync(target, connectionString, options, cost).ConfigureAwait(false);
-                results.Add(result);
-                Console.WriteLine(result.ToLine());
+                Console.Error.WriteLine("Refuse to overwrite an earlier benchmark report.");
+                return 1;
             }
-
-            Console.WriteLine();
-            Console.WriteLine(RunResult.Header);
-            foreach (var r in results)
+            var report = new TransportBenchmarkReport { DatabaseLatencyLabel = options.DatabaseLatencyLabel };
+            try
             {
-                Console.WriteLine(r.ToTableRow());
+                if (target.Policy?.ConcurrentMessageLimit == 1 && options.PublishParallelism != 1)
+                    throw new InvalidOperationException("Strict ordering validation requires publish-parallelism1.");
+                var admin = new NpgsqlConnectionStringBuilder(options.AdminConnectionString!);
+                if (admin.Database != "postgres") throw new InvalidOperationException("The explicit admin connection must target the private fixture's postgres maintenance database.");
+                report.DatabaseHost = admin.Host;
+                report.DatabasePort = admin.Port;
+                Console.WriteLine($"# policy: {DescribePolicy(target, options)}; synthetic handlers; real inbox settlement");
+                for (var index = 0; index < options.HandlerCostMs.Count; index++)
+                {
+                    var database = options.HandlerCostMs.Count == 1 ? options.Database : $"{options.Database}_{index}";
+                    var connectionString = await EnsureBenchDatabaseAsync(options, database).ConfigureAwait(false);
+                    var result = await MeasureAsync(target, connectionString, options, options.HandlerCostMs[index]).ConfigureAwait(false);
+                    report.Results.Add(result);
+                    Console.WriteLine(result.ToLine());
+                    if (!result.Complete) break;
+                }
+                report.Passed = RunResult.AllComplete(report.Results) && report.Results.Count == options.HandlerCostMs.Count;
             }
-
-            return 0;
+            catch (Exception error)
+            {
+                report.Error = $"{error.GetType().Name}: {error.Message}";
+                Console.Error.WriteLine(report.Error);
+            }
+            var destination = Path.GetFullPath(options.OutputPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            var temporary = destination + $".{Guid.NewGuid():N}.tmp";
+            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(report, TransportBenchmarkJsonContext.Default.TransportBenchmarkReport)).ConfigureAwait(false);
+            File.Move(temporary, destination, overwrite: false);
+            return report.Passed ? 0 : 1;
         }
 
         private static async Task<RunResult> MeasureAsync(
@@ -179,66 +225,116 @@ namespace ConduitLLM.Benchmarks.Messaging
             int handlerCostMs)
         {
             var collector = new DeliveryCollector(handlerCostMs);
-
+            DeliverySnapshot? warmup = null;
+            string? failure = null;
+            var warmupComplete = false;
+            StoreSetup? setup = null;
+            double publishRate = 0, elapsedSeconds = 0;
+            var rtt = await MeasureRttAsync(connectionString).ConfigureAwait(false);
             using var host = BuildHost(target, connectionString, collector, options);
             await host.StartAsync().ConfigureAwait(false);
-
             try
             {
                 var bus = host.Services.GetRequiredService<IMessageBus>();
-
-                // Warm up until the listener is actually delivering. On an exclusive listener
-                // (spend, image) nothing is delivered until the durability agent assigns the
-                // queue to a node, which takes seconds on a cold host; measuring through that
-                // window would charge one-off leader election to every message in the run.
-                collector.BeginMeasurement(options.WarmupCount);
-                await PublishAllAsync(bus, target, options, options.WarmupCount).ConfigureAwait(false);
-                if (!await collector.WaitForCompletionAsync(options.Timeout).ConfigureAwait(false))
+                warmupComplete = await RunPhaseAsync(bus, target, connectionString, collector, options,
+                    options.WarmupCount, offeredRate: 0, setupObserved: state => setup = state).ConfigureAwait(false);
+                warmup = collector.Snapshot();
+                if (!warmupComplete) throw new InvalidOperationException("Warmup did not finish and durably settle; measurement was not started.");
+                var start = Stopwatch.GetTimestamp();
+                var completed = await RunPhaseAsync(bus, target, connectionString, collector, options, options.MessageCount, options.OfferedRate,
+                    rate => publishRate = rate).ConfigureAwait(false);
+                elapsedSeconds = Elapsed(start);
+                if (!completed) failure = "Measurement did not finish and durably settle before its deadline.";
+            }
+            catch (Exception error) { failure = $"{error.GetType().Name}: {error.Message}"; }
+            finally
+            {
+                try { await host.StopAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false); }
+                catch (Exception error)
                 {
-                    Console.Error.WriteLine(
-                        $"# warm-up did not drain ({collector.Delivered}/{options.WarmupCount}) — listener may never have started");
+                    var stopFailure = $"Host stop failed: {error.GetType().Name}: {error.Message}";
+                    failure = failure is null ? stopFailure : $"{failure} {stopFailure}";
                 }
+            }
+            var measurement = collector.Snapshot();
+            warmup ??= measurement;
+            var records = measurement.Deliveries.Where(d => d.SettlementObservedTicks > 0).ToArray();
+            var first = records.Length > 0 ? records.Min(d => d.StartedTicks) : 0;
+            double Rate(long last) => first > 0 && last > first ? records.Length * (double)Stopwatch.Frequency / (last - first) : 0;
+            var latency = records.Select(d => (d.SettlementObservedTicks - d.PublishedTicks) * 1000d / Stopwatch.Frequency).Order().ToArray();
+            double Percentile(double q) => latency.Length == 0 ? 0 : latency[Math.Clamp((int)Math.Ceiling(q * latency.Length) - 1, 0, latency.Length - 1)];
+            var batch = options.ReceiveBatchOverride ?? target.Policy?.PrefetchCount ?? 50;
+            return new RunResult(target.Key, handlerCostMs, options.OfferedRate, batch,
+                warmupComplete && measurement.Complete && failure is null, warmupComplete, publishRate,
+                records.Length > 0 ? Rate(records.Max(d => d.FinishedTicks)) : 0,
+                records.Length > 0 ? Rate(records.Max(d => d.SettlementObservedTicks)) : 0,
+                elapsedSeconds, Percentile(.50), Percentile(.95), Percentile(.99),
+                options.OfferedRate <= 0 && measurement.StoreSamples.Count(s => s.Ready >= batch) >= 3,
+                rtt, warmup, measurement, failure, setup);
+        }
 
-                collector.BeginMeasurement(options.MessageCount);
-
-                var publishStart = Stopwatch.GetTimestamp();
-                if (options.OfferedRate > 0)
-                {
-                    // Fixed offered load: the queue stays shallow, so publish→handle latency
-                    // reflects transport overhead rather than backlog depth.
-                    await PublishAtRateAsync(bus, target, options).ConfigureAwait(false);
-                }
-                else
-                {
-                    // Saturation: publish the whole batch up front so the listener is never
-                    // starved and what we time is the transport's ceiling rather than the
-                    // producer's. The achieved publish rate is reported too — if it ever lands
-                    // near the delivery rate, the run was producer-bound and the delivery
-                    // number is a floor, not a ceiling.
-                    await PublishAllAsync(bus, target, options, options.MessageCount).ConfigureAwait(false);
-                }
-
-                var publishSeconds = Elapsed(publishStart);
-                var drained = await collector.WaitForCompletionAsync(options.Timeout).ConfigureAwait(false);
-
-                return new RunResult(
-                    target.Key,
-                    handlerCostMs,
-                    options.OfferedRate,
-                    Published: options.MessageCount,
-                    Delivered: collector.Delivered,
-                    Complete: drained,
-                    PublishRate: options.MessageCount / publishSeconds,
-                    DeliveryRate: collector.DeliveryRatePerSecond,
-                    LatencyP50Ms: collector.Percentile(0.50),
-                    LatencyP95Ms: collector.Percentile(0.95),
-                    LatencyP99Ms: collector.Percentile(0.99),
-                    MaxObservedConcurrency: collector.MaxObservedConcurrency);
+        private static async Task<bool> RunPhaseAsync(IMessageBus bus, QueueTarget target, string connectionString,
+            DeliveryCollector collector, HarnessOptions options, int count, double offeredRate,
+            Action<double>? published = null, Action<StoreSetup>? setupObserved = null)
+        {
+            collector.BeginMeasurement(count, requireOrdering: target.Policy?.ConcurrentMessageLimit == 1);
+            using var phase = new CancellationTokenSource(options.Timeout);
+            Task? sampling = null;
+            var start = Stopwatch.GetTimestamp();
+            try
+            {
+                if (setupObserved is not null)
+                    await WaitForStoreSchemaAsync(connectionString, target, state =>
+                    {
+                        setupObserved(state);
+                        Console.WriteLine($"# observer readiness: polls={state.Polls} elapsedMs={state.ElapsedMilliseconds:F1} ready={state.Ready} relations={string.Join(',', state.RequiredRelations)}");
+                    }, phase.Token).ConfigureAwait(false);
+                sampling = SampleStoreAsync(connectionString, target, collector, phase.Token);
+                var publishing = PublishAsync(bus, target, collector, options, count, offeredRate);
+                var first = await Task.WhenAny(publishing, sampling).WaitAsync(phase.Token).ConfigureAwait(false);
+                if (first == sampling) await sampling.ConfigureAwait(false);
+                await publishing.ConfigureAwait(false);
+                published?.Invoke(count / Elapsed(start));
+                var remaining = options.Timeout - TimeSpan.FromSeconds(Elapsed(start));
+                if (remaining <= TimeSpan.Zero) return false;
+                var completion = collector.WaitForCompletionAsync(remaining);
+                first = await Task.WhenAny(completion, sampling).ConfigureAwait(false);
+                if (first == sampling) await sampling.ConfigureAwait(false);
+                return await completion.ConfigureAwait(false);
             }
             finally
             {
-                await host.StopAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+                await phase.CancelAsync().ConfigureAwait(false);
+                if (sampling is not null)
+                {
+                    try { await sampling.ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (phase.IsCancellationRequested)
+                    {
+                        // Shutdown cancels the sampler after the phase has produced its result.
+                    }
+                }
             }
+        }
+
+        private static async Task WaitForStoreSchemaAsync(string connectionString, QueueTarget target,
+            Action<StoreSetup> observed, CancellationToken cancellationToken)
+        {
+            var name = (target.Policy?.Name ?? ConduitMessagingTopology.GatewayEventsQueue).Replace('-', '_');
+            string[] required = [$"wolverine_queues.wolverine_queue_{name}", $"wolverine_queues.wolverine_queue_{name}_scheduled",
+                "wolverine_conduit_bench.wolverine_incoming_envelopes", "wolverine_conduit_bench.wolverine_outgoing_envelopes",
+                "wolverine_conduit_bench.wolverine_dead_letters"];
+            await using var connection = new NpgsqlConnection(connectionString);
+            await StoreSchemaReadiness.WaitAsync(required, async token =>
+            {
+                if (connection.State != System.Data.ConnectionState.Open)
+                    await connection.OpenAsync(token).ConfigureAwait(false);
+                await using var command = new NpgsqlCommand("SELECT name FROM unnest(@names::text[]) AS name WHERE to_regclass(name) IS NOT NULL ORDER BY name", connection) { CommandTimeout = 5 };
+                command.Parameters.AddWithValue("names", required);
+                var present = new List<string>();
+                await using var reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                while (await reader.ReadAsync(token).ConfigureAwait(false)) present.Add(reader.GetString(0));
+                return present.ToArray();
+            }, observed, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -246,55 +342,87 @@ namespace ConduitLLM.Benchmarks.Messaging
         /// <see cref="HarnessOptions.OfferedRate"/>, on an absolute schedule so a slow publish
         /// does not push the whole run late.
         /// </summary>
-        private static async Task PublishAtRateAsync(IMessageBus bus, QueueTarget target, HarnessOptions options)
+        private static async Task PublishAsync(IMessageBus bus, QueueTarget target, DeliveryCollector collector,
+            HarnessOptions options, int count, double offeredRate)
         {
-            var interval = 1.0 / options.OfferedRate;
             var start = Stopwatch.GetTimestamp();
-            var pending = new List<Task>(options.MessageCount);
-
-            for (var i = 0; i < options.MessageCount; i++)
+            var pending = new List<Task>(count);
+            using var gate = new SemaphoreSlim(options.PublishParallelism);
+            async Task SendAsync(object message)
             {
-                var dueSeconds = interval * i;
-                var behind = dueSeconds - (Stopwatch.GetTimestamp() - start) / (double)Stopwatch.Frequency;
-                if (behind > 0)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(behind)).ConfigureAwait(false);
-                }
-
-                var index = i;
-                var tag = Stopwatch.GetTimestamp().ToString(CultureInfo.InvariantCulture);
-                pending.Add(bus.PublishAsync(target.Factory(index, tag)).AsTask());
+                try { await bus.PublishAsync(message).ConfigureAwait(false); }
+                finally { gate.Release(); }
             }
-
+            for (var i = 0; i < count; i++)
+            {
+                if (offeredRate > 0)
+                {
+                    var wait = i / offeredRate - Elapsed(start);
+                    if (wait > 0) await Task.Delay(TimeSpan.FromSeconds(wait)).ConfigureAwait(false);
+                }
+                await gate.WaitAsync().ConfigureAwait(false);
+                var message = target.Factory(i, collector.PhaseId);
+                collector.RegisterPublished(message, i, Stopwatch.GetTimestamp());
+                pending.Add(SendAsync(message));
+            }
             await Task.WhenAll(pending).ConfigureAwait(false);
         }
 
-        private static async Task PublishAllAsync(IMessageBus bus, QueueTarget target, HarnessOptions options, int count)
+        private static async Task<double[]> MeasureRttAsync(string connectionString)
         {
-            // Bounded fan-out: each publish is an outbox INSERT, so a little parallelism is
-            // needed to get ahead of the listener without opening an unbounded connection storm.
-            using var gate = new SemaphoreSlim(options.PublishParallelism);
-            var tasks = new List<Task>(count);
-
-            for (var i = 0; i < count; i++)
+            await using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            var samples = new double[20];
+            for (var i = 0; i < samples.Length; i++)
             {
-                var index = i;
-                await gate.WaitAsync().ConfigureAwait(false);
-                tasks.Add(Task.Run(async () =>
-                {
-                    try
-                    {
-                        var tag = Stopwatch.GetTimestamp().ToString(CultureInfo.InvariantCulture);
-                        await bus.PublishAsync(target.Factory(index, tag)).ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        gate.Release();
-                    }
-                }));
+                await using var command = new NpgsqlCommand("SELECT 1", connection);
+                var start = Stopwatch.GetTimestamp();
+                await command.ExecuteScalarAsync().ConfigureAwait(false);
+                samples[i] = Elapsed(start) * 1000;
             }
+            return samples;
+        }
 
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+        private static async Task SampleStoreAsync(string connectionString, QueueTarget target,
+            DeliveryCollector collector, CancellationToken cancellationToken)
+        {
+            var name = (target.Policy?.Name ?? ConduitMessagingTopology.GatewayEventsQueue).Replace('-', '_');
+            if (!System.Text.RegularExpressions.Regex.IsMatch(name, "^[a-z_]+$"))
+                throw new InvalidOperationException("Unexpected benchmark queue identifier.");
+            var sql = $"""
+                SELECT
+                  (SELECT count(*) FROM wolverine_queues.wolverine_queue_{name}),
+                  (SELECT count(*) FROM wolverine_queues.wolverine_queue_{name}_scheduled),
+                  (SELECT count(*) FROM wolverine_conduit_bench.wolverine_incoming_envelopes WHERE status<>'Handled'),
+                  (SELECT count(*) FROM wolverine_conduit_bench.wolverine_outgoing_envelopes),
+                  (SELECT count(*) FROM wolverine_conduit_bench.wolverine_dead_letters),
+                  (SELECT coalesce(array_agg(id),ARRAY[]::uuid[]) FROM wolverine_conduit_bench.wolverine_incoming_envelopes
+                   WHERE status='Handled' AND id=ANY(@ids))
+                """;
+            try
+            {
+                await using var connection = new NpgsqlConnection(connectionString);
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+                while (true)
+                {
+                    await using (var command = new NpgsqlCommand(sql, connection) { CommandTimeout = 5 })
+                    {
+                        command.Parameters.AddWithValue("ids", collector.PendingTransportIds());
+                        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                            throw new InvalidOperationException("Missing store observation row.");
+                        collector.ObserveStore(Stopwatch.GetTimestamp(), reader.GetFieldValue<Guid[]>(5),
+                            reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2), reader.GetInt64(3), reader.GetInt64(4));
+                    }
+                    await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception error)
+            {
+                collector.Fail($"Store observation failed: {error.GetType().Name}: {error.Message}");
+                throw;
+            }
         }
 
         private static IHost BuildHost(
@@ -338,8 +466,7 @@ namespace ConduitLLM.Benchmarks.Messaging
                     {
                         // Benchmark-only event sets are selected at runtime and therefore
                         // cannot use either production host's committed adapter registry.
-                        opts.CodeGeneration.TypeLoadMode = TypeLoadMode.Dynamic;
-                        opts.UseRuntimeCompilation();
+                        ConfigureRuntimeCompilation(opts);
 
                         AddBenchmarkBridges(opts, target.EventTypes);
 
@@ -373,10 +500,9 @@ namespace ConduitLLM.Benchmarks.Messaging
         /// Creates the isolated benchmark database if it does not exist and returns its
         /// connection string.
         /// </summary>
-        private static async Task<string> EnsureBenchDatabaseAsync(HarnessOptions options)
+        private static async Task<string> EnsureBenchDatabaseAsync(HarnessOptions options, string database)
         {
-            var adminBuilder = new NpgsqlConnectionStringBuilder(options.AdminConnectionString);
-            var database = options.Database;
+            var adminBuilder = new NpgsqlConnectionStringBuilder(options.AdminConnectionString!);
 
             await using (var admin = new NpgsqlConnection(adminBuilder.ConnectionString))
             {
@@ -387,14 +513,10 @@ namespace ConduitLLM.Benchmarks.Messaging
                 exists.Parameters.AddWithValue("name", database);
                 var found = await exists.ExecuteScalarAsync().ConfigureAwait(false) is not null;
 
-                if (!found)
-                {
-                    // Identifier cannot be parameterized; quote it instead.
-                    await using var create = new NpgsqlCommand(
-                        $"CREATE DATABASE \"{database.Replace("\"", "\"\"")}\"", admin);
-                    await create.ExecuteNonQueryAsync().ConfigureAwait(false);
-                    Console.WriteLine($"# created isolated benchmark database '{database}'");
-                }
+                if (found) throw new InvalidOperationException("Refuse an existing benchmark database; use a fresh owned name.");
+                await using var create = new NpgsqlCommand($"CREATE DATABASE \"{database}\"", admin);
+                await create.ExecuteNonQueryAsync().ConfigureAwait(false);
+                Console.WriteLine($"# created isolated benchmark database '{database}'");
             }
 
             var target = new NpgsqlConnectionStringBuilder(adminBuilder.ConnectionString)
@@ -448,7 +570,8 @@ namespace ConduitLLM.Benchmarks.Messaging
                       --queue <spend|webhook|image|video|gateway-default> \
                       [--messages 2000] [--handler-cost-ms 0,5,10,25] [--rate 0] \
                       [--warmup 10] [--publish-parallelism 32] [--timeout-seconds 300] \
-                      [--database conduit_msgbench] [--admin-connection "<npgsql connstring to 'postgres' db>"]
+                      [--receive-batch 10] [--database conduit_msgbench_<unique>] [--output <fresh.json>] \
+                      --admin-connection "<explicit private fixture connection to 'postgres' db>"
 
                 Measures sustained delivery throughput and publish->handle latency for one
                 tuned queue, using the production endpoint policies. Runs against an isolated

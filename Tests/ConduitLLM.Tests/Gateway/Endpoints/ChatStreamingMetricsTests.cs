@@ -53,6 +53,60 @@ public class ChatStreamingMetricsTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PeriodicMetrics_PreservesNonContentEventsAndCountsContentOncePerChunk(bool enhanced)
+    {
+        var context = CreateContext(enhanced);
+        var endpoints = CreateEndpoints(context, []);
+        var writer = context.Response.CreateEnhancedSSEWriter(GatewayJsonOptions.Create(), enhanced);
+        var collector = new StreamingMetricsCollector("request", "test-model", "provider", TimeSpan.Zero);
+        await endpoints.EmitPeriodicMetrics(new ChatCompletionChunk { Choices = [] }, writer, collector, CancellationToken.None);
+        foreach (var delta in new[]
+        {
+            new DeltaContent { Role = "assistant" },
+            new DeltaContent { Reasoning = "thinking" },
+            new DeltaContent { ToolCalls = [new ToolCallChunk { Index = 0, Id = "call" }] },
+            new DeltaContent { Content = "" }
+        })
+        {
+            await endpoints.EmitPeriodicMetrics(new ChatCompletionChunk
+            {
+                Choices = [new StreamingChoice { Index = 0, Delta = delta }]
+            }, writer, collector, CancellationToken.None);
+        }
+        Assert.False(collector.HasRecordedFirstToken);
+        await endpoints.EmitPeriodicMetrics(new ChatCompletionChunk
+        {
+            Choices =
+            [
+                new StreamingChoice { Index = 0, Delta = new DeltaContent { Content = "one" } },
+                new StreamingChoice { Index = 1, Delta = new DeltaContent { Content = "two" } }
+            ]
+        }, writer, collector, CancellationToken.None);
+        await endpoints.EmitPeriodicMetrics(ContentChunk("three"), writer, collector, CancellationToken.None);
+
+        Assert.Equal(enhanced, collector.HasRecordedFirstToken);
+        Assert.Equal(enhanced ? 2 : 0, collector.GetMetrics().TokensGenerated);
+        Assert.Equal(enhanced ? 6 : 0, writer.EventsWritten);
+        if (enhanced)
+        {
+            var events = ReadBody(context).Split('\n').Where(line => line.StartsWith("data: ")).ToArray();
+            Assert.Equal(6, events.Length);
+            for (var index = 0; index < events.Length; index++)
+            {
+                using var document = JsonDocument.Parse(events[index][6..]);
+                Assert.Equal(index < 4 ? 0 : index - 3, document.RootElement.GetProperty("tokens_generated").GetInt32());
+                Assert.Equal(index >= 4, document.RootElement.TryGetProperty("time_to_first_token_ms", out _));
+            }
+        }
+        else
+        {
+            Assert.Equal(string.Empty, ReadBody(context));
+        }
+    }
+
     /// <summary>Verifies completion framing and usage accounting across stream dialects and usage options.</summary>
     [Theory]
     [InlineData(false, false)]

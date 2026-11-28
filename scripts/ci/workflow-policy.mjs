@@ -26,8 +26,21 @@ export function validateWorkflows(workflows, required) {
         `${name}: unsupported queue or cancellation combination`);
     }
     for (const [id, job] of Object.entries(workflow.jobs)) {
-      if (!job.uses) require(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes'] > 0 && job['timeout-minutes'] <= 90,
+      if (job.uses) continue;
+      const timeout = job['timeout-minutes'];
+      if (name === 'streaming-performance.yml' && id === 'matched' && timeout === '${{ matrix.timeout_minutes }}') {
+        // Each matched job keeps its measurements together on one native runner.
+        const timeLimits = new Map([['main', 180], ['isolated-standard', 150]]);
+        const matrix = job.strategy?.matrix;
+        const rows = matrix?.include;
+        require(Object.keys(matrix ?? {}).length === 1 && Array.isArray(rows) && rows.length > 0 &&
+          rows.every(row => Number.isInteger(row.timeout_minutes) && row.timeout_minutes > 0 &&
+            row.timeout_minutes <= (timeLimits.get(row.profile) ?? 90)),
         `${name}/${id}: missing bounded timeout`);
+      } else {
+        require(Number.isInteger(timeout) && timeout > 0 && timeout <= 90,
+          `${name}/${id}: missing bounded timeout`);
+      }
     }
   }
   require(array(workflows['native-aot.yml']?.on?.pull_request?.paths).includes('tools/ConduitLLM.HealthProbe/**'),
