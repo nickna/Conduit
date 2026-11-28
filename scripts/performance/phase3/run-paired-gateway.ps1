@@ -28,7 +28,7 @@ if ($ExcludeIsolatedStandardCases -and ($Architecture -ne 'X64' -or $Profile -ne
  $isolatedStandard -or $SameRevisionControl)) {
  throw 'Only the amd64 main candidate can exclude cases covered by its isolated performance job'
 }
-if ($isolatedStandard -and ($Profile -ne 'main' -or $Runs -ne $repetitions -or $SameRevisionControl)) {
+if ($isolatedStandard -and ($Profile -ne 'main' -or $Runs -ne $repetitions)) {
  throw "An isolated standard SSE case requires $repetitions three-cohort repetitions"
 }
 if(!$IsLinux -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() -cne $Architecture){throw 'Require matching native Linux hardware'}
@@ -163,15 +163,18 @@ foreach($definition in $cohortDefinitions){
   redisUrl="redis://127.0.0.1:16476/$($definition.db)";knownResponsesFailure=$definition.known})
 }
 $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindings.json" -Encoding utf8NoBOM
-if ($threeArms) {
+if ($threeArms -or $SameRevisionControl) {
  $referenceFiles = @($sourceBindings[0].files | ForEach-Object {
   $_.path.Substring('fixed'.Length) + ':' + $_.bytes + ':' + $_.sha256
  })
- $controlFiles = @($sourceBindings[1].files | ForEach-Object {
-  $_.path.Substring('legacy'.Length) + ':' + $_.bytes + ':' + $_.sha256
- })
- if (Compare-Object $referenceFiles $controlFiles -CaseSensitive) {
-  throw 'The byte-identical control differs from the published baseline'
+ foreach ($binding in $sourceBindings) {
+  if ($binding.id -ceq 'fixed' -or (!$SameRevisionControl -and $binding.id -cne 'legacy')) { continue }
+  $controlFiles = @($binding.files | ForEach-Object {
+   $_.path.Substring($binding.id.Length) + ':' + $_.bytes + ':' + $_.sha256
+  })
+  if (Compare-Object $referenceFiles $controlFiles -CaseSensitive) {
+   throw "The byte-identical $($binding.id) control differs from the published baseline"
+  }
  }
 }
 $seedSource=Join-Path $work 'seed-source';New-Item -ItemType Directory -Path $seedSource|Out-Null

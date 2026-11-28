@@ -72,6 +72,23 @@ payload and concurrency are preserved. The same bidirectional control check
 applies to every evaluated metric. All three arms must pass strict protocol
 validation and financial reconciliation.
 
+To reproduce the 1,000-chunk identical-binary control on native amd64 Linux,
+use the full baseline SHA for both revisions. The harness checks relative
+paths, sizes and SHA-256 hashes for all three Gateway and migrator publications
+before starting the workload.
+
+```powershell
+./scripts/performance/phase3/run-paired-gateway.ps1 `
+  -BaselineRevision $baseline -CandidateRevision $baseline -SameRevisionControl `
+  -Architecture X64 -IsolatedStandardChunks 1000 -Runs 12 -CalibrateControl `
+  -OutputDirectory ./artifacts/standard-1000-identical
+```
+
+Check the four comparisons in `summary.json` for any
+`outside-working-threshold` result. Once all four pass, rerun the command
+with the PR SHA for `-CandidateRevision`, omit `-SameRevisionControl` and
+use a fresh output directory.
+
 Phase 3 waits for the Gateway's active streams gauge to reach zero before
 capturing each workload's starting and ending metrics snapshots. A client
 can finish observing a cancellation while the Gateway is still finalizing
