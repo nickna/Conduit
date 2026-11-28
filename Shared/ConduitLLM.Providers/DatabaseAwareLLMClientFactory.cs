@@ -224,6 +224,16 @@ namespace ConduitLLM.Providers
                 throw new ModelNotFoundException(modelName, ModelUnavailableMessage(modelName));
             }
 
+            return await GetClientForMappingAsync(modelName, mapping, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public async Task<ILLMClient> GetClientForMappingAsync(
+            string modelAlias,
+            ModelProviderMapping mapping,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(mapping);
             _logger.LogDebug("Found mapping in database: {ModelAlias} -> ProviderId:{ProviderId}/{ProviderModelId}",
                 mapping.ModelAlias, mapping.ProviderId, mapping.ProviderModelId);
 
@@ -233,7 +243,7 @@ namespace ConduitLLM.Providers
             if (provider == null)
             {
                 _logger.LogWarning("Provider {ProviderId} not found", mapping.ProviderId);
-                throw new ServiceUnavailableException($"Provider for model '{modelName}' is not available.", "Provider");
+                throw new ServiceUnavailableException($"Provider for model '{modelAlias}' is not available.", "Provider");
             }
 
             var credentials = await ValidateProviderAndGetCredentialsAsync(provider);

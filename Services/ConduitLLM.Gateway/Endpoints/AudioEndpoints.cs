@@ -57,7 +57,7 @@ namespace ConduitLLM.Gateway.Endpoints
 
             StampBillingItems(mapping);
 
-            var client = await _clientFactory.GetClientAsync(model, cancellationToken);
+            var client = await _clientFactory.GetClientForMappingAsync(model, mapping, cancellationToken);
             var stt = client.FindInChain<IAudioTranscriptionClient>();
             if (stt == null)
                 return OpenAIError(400, $"Model {model} does not support speech-to-text transcription.", "unsupported_model");

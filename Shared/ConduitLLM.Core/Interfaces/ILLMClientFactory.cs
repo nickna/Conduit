@@ -17,6 +17,12 @@ public interface ILLMClientFactory
     /// <exception cref="UnsupportedProviderException">Thrown if the provider specified in the configuration is not supported by this factory.</exception>
     Task<ILLMClient> GetClientAsync(string modelAlias, CancellationToken cancellationToken = default);
 
+    /// <summary>Creates a client for the model mapping already resolved for this request.</summary>
+    Task<ILLMClient> GetClientForMappingAsync(
+        string modelAlias,
+        ConduitLLM.Configuration.Entities.ModelProviderMapping mapping,
+        CancellationToken cancellationToken = default) => GetClientAsync(modelAlias, cancellationToken);
+
     /// <summary>Gets a provider client using chat-only provider-aware routing.</summary>
     Task<ILLMClient> GetClientForChatAsync(
         ConduitLLM.Core.Models.ChatCompletionRequest request,

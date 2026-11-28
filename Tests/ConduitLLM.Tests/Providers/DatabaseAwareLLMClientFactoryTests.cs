@@ -363,8 +363,10 @@ namespace ConduitLLM.Tests.Providers
             Assert.Contains("No API key configured", exception.Message);
         }
 
-        [Fact]
-        public async Task GetClientAsync_WithMultipleEnabledKeys_WrapsClientsForKeyFailover()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task GetClientAsync_WithMultipleEnabledKeys_WrapsClientsForKeyFailover(bool mappingAlreadyResolved)
         {
             var mapping = new ModelProviderMapping
             {
@@ -411,7 +413,12 @@ namespace ConduitLLM.Tests.Providers
                     }
                 });
 
-            var client = await _factory.GetClientAsync("test-model");
+            var client = mappingAlreadyResolved
+                ? await _factory.GetClientForMappingAsync("test-model", mapping)
+                : await _factory.GetClientAsync("test-model");
+
+            _mockMappingService.Verify(service => service.GetMappingByModelAliasAsync("test-model"),
+                mappingAlreadyResolved ? Times.Never() : Times.Once());
 
             Assert.IsType<ProviderKeyFailoverLLMClient>(client);
         }
