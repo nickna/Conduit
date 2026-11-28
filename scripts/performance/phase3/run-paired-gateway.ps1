@@ -14,7 +14,7 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
 $ErrorActionPreference='Stop'
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
-$repetitions = if ($Profile -eq 'pressure' -and $CalibrateControl) { 12 } else { 6 }
+$repetitions = if (($Profile -eq 'pressure' -or $isolatedStandard) -and $CalibrateControl) { 12 } else { 6 }
 if ($CalibrateControl -and !$threeArms) {
  throw 'Calibration requires a byte-identical control'
 }
@@ -28,8 +28,8 @@ if ($ExcludeIsolatedStandardCases -and ($Architecture -ne 'X64' -or $Profile -ne
  $isolatedStandard -or $SameRevisionControl)) {
  throw 'Only the amd64 main candidate can exclude cases covered by its isolated performance job'
 }
-if ($isolatedStandard -and ($Profile -ne 'main' -or $Runs -ne 6 -or $SameRevisionControl)) {
- throw 'An isolated standard SSE case requires six three-cohort repetitions'
+if ($isolatedStandard -and ($Profile -ne 'main' -or $Runs -ne $repetitions -or $SameRevisionControl)) {
+ throw "An isolated standard SSE case requires $repetitions three-cohort repetitions"
 }
 if(!$IsLinux -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() -cne $Architecture){throw 'Require matching native Linux hardware'}
 $repository=(& git rev-parse --show-toplevel).Trim()
@@ -258,6 +258,8 @@ if($Profile -eq 'main'){
    $sampleCounts = @{requests = 600; warmups = 80}
   } elseif ($CalibrateControl -and $IsolatedStandardChunks -eq 1000) {
    $sampleCounts = @{requests = 480; warmups = 80}
+  } elseif ($CalibrateControl -and $IsolatedStandardChunks -eq 10000) {
+   $sampleCounts = @{requests = 240; warmups = 12}
   }
   $mainCatalog.cases[0].requests = $sampleCounts.requests
   $mainCatalog.cases[0].warmupRequests = $sampleCounts.warmups

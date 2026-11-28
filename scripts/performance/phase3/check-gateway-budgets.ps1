@@ -8,7 +8,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $hasControl = $Profile -ne 'pressure' -or $InterleavedControl
-$pairCount = if ($Profile -eq 'pressure' -and $CalibrateControl) { 12 } elseif ($hasControl) { 6 } else { 5 }
+$pairCount = if ($Profile -in @('pressure', 'isolated-standard') -and $CalibrateControl) { 12 } elseif ($hasControl) { 6 } else { 5 }
 if ($CalibrateControl -and !$hasControl) { throw 'Calibration requires a byte-identical control' }
 $expectedPairs = @('fixed->candidate')
 if ($hasControl) {
