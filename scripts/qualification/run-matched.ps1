@@ -7,10 +7,11 @@ $configuration=Get-Content -Raw -LiteralPath $ConfigurationPath | ConvertFrom-Js
 . (Join-Path $PSScriptRoot 'diagnostic-policy.ps1')
 $diagnostic=$configuration.diagnostic -eq $true -and $configuration.profile -ceq 'pressure8'
 if($configuration.diagnostic -and !$diagnostic){throw 'Diagnostic exception is restricted to pressure8'}
+$extendedIsolated = $configuration.profile -ceq 'sse-isol' -and $configuration.cpuPlacement -and $configuration.runs -eq 12
 $extendedPressure = $configuration.profile -ceq 'pressure64' -and
  $configuration.interleavedControl -and $configuration.cpuPlacement -and $configuration.runs -eq 12
 if($configuration.schemaVersion -ne 1 -or $(if($diagnostic){$configuration.runs -ne 1}else{
- !$extendedPressure -and ($configuration.runs -lt 3 -or $configuration.runs -gt 6)
+ !$extendedPressure -and !$extendedIsolated -and ($configuration.runs -lt 3 -or $configuration.runs -gt 6)
 })){throw 'Invalid qualification configuration'}
 if(!$IsLinux){throw 'Matched measurements require native Linux'}
 if((Test-Path -LiteralPath $OutputDirectory) -and @(Get-ChildItem -LiteralPath $OutputDirectory -Force).Count){throw 'Use a fresh output directory; previous evidence must remain unchanged'}
@@ -86,12 +87,12 @@ if($Stage -eq 'prepare'){
 }
 $isolatedStandard = $configuration.profile -ceq 'sse-isol'
 $threeArms = $isolatedStandard -or $configuration.interleavedControl
-if ($threeArms -and ($cohorts.Count -ne 3 -or ($configuration.runs -ne 6 -and !$extendedPressure))) {
+if ($threeArms -and ($cohorts.Count -ne 3 -or ($configuration.runs -ne 6 -and !$extendedPressure -and !$extendedIsolated))) {
  throw 'Invalid interleaved cohort or repetition inventory'
 }
 if ($isolatedStandard -and ($cases.Count -ne 1 -or $cases[0].id -cnotin @('standard-100','standard-1000','standard-10000') -or
   $cases[0].endpoint -cne 'standard-sse')) {
- throw 'Expected three cohorts, six repetitions and one standard SSE case'
+ throw 'Expected one isolated standard SSE case'
 }
 if($configuration.infrastructurePrepared -ne $true){throw 'Require explicit fixture preparation receipt before measurement'}
 $handler=[Net.Http.SocketsHttpHandler]::new();$handler.UseProxy=$false
@@ -153,9 +154,13 @@ try{
   $order=if($run%2 -eq 1){@($cohorts)}else{@($cohorts[($cohorts.Count-1)..0])}
   if ($threeArms) {
    # Each block of six repetitions places each cohort in each position twice.
-   $first = [int][Math]::Floor(($run - 1) / 2)
-   $direction = if ($run % 2 -eq 1) { 1 } else { 2 }
+   # Mirror the first 18 arm executions in the second block to balance host drift.
+   $mirrored = $extendedIsolated -and $run -gt 6
+   $orderRun = if ($mirrored) { 13 - $run } else { $run }
+   $first = [int][Math]::Floor(($orderRun - 1) / 2)
+   $direction = if ($orderRun % 2 -eq 1) { 1 } else { 2 }
    $order = @(0..2 | ForEach-Object { $cohorts[($first + $direction * $_) % 3] })
+   if ($mirrored) { [Array]::Reverse($order) }
   }
   foreach($cohort in $order){
    # Cohort prefixes identify artifacts/control windows only. User/provider
