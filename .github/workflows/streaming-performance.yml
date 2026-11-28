@@ -58,6 +58,7 @@ jobs:
             runner: ubuntu-24.04
             profile: pressure
             timeout_minutes: 90
+            interleaved_control: true
           - arch: Arm64
             runner: ubuntu-24.04-arm
             profile: pressure

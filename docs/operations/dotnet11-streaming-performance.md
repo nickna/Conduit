@@ -108,11 +108,11 @@ For Gateway qualification, run from a full checkout containing the candidate:
   -Profile main -Runs 6 -InterleavedControl -CalibrateControl -OutputDirectory <fresh-directory>
 ```
 
-Repeat on matching native ARM64 hardware. Run ARM64 pressure with
-`-Profile pressure -Runs 12 -InterleavedControl -CalibrateControl` and x64
-pressure with `-Profile pressure -Runs 5`. Pass `-CalibrateControl` to the
-budget checker for the calibrated profiles and `-InterleavedControl` for the
-ARM64 pressure profile. The versioned provider, client, observer, capture and
+Repeat on matching native ARM64 hardware. Both native pressure jobs run
+`-Profile pressure -Runs 12 -InterleavedControl -CalibrateControl`.
+Each repetition measures the original four pressure cases against both
+baseline copies. Pass `-CalibrateControl` to the budget checker for the
+calibrated profiles and `-InterleavedControl` for pressure. The versioned provider, client, observer, capture and
 reconciliation tools remain source-bound. Both sources must pass protocol and
 financial checks. Main derives its catalog from the unchanged phase-0 fixture,
 retaining all case options and increasing sample counts and warmups for
