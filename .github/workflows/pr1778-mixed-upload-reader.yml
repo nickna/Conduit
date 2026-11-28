@@ -1,0 +1,96 @@
+name: PR 1778 mixed audio reader comparison
+
+on:
+  push:
+    branches: [codex/pr1778-mixed-upload-reader]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-performance-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  matched:
+    name: Mixed upload reader ${{ matrix.reference }} (X64)
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - reference: exact-versus-original
+            candidate: '7327d9e3075992386fa4866c22da68c6db770e7a'
+            revision: '8e0e2372811554a4b4546d892b5a48b197c05b27'
+            runner: ubuntu-24.04
+            timeout_minutes: 210
+          - reference: buffered-versus-pr-base
+            candidate: '510dda63d1af136b91e19d116036c68774f99f9c'
+            revision: '96ffd94da1286becc60404858c948824235bea93'
+            runner: ubuntu-24.04
+            timeout_minutes: 210
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      CANDIDATE_REVISION: ${{ matrix.candidate }}
+      BASELINE_REVISION: ${{ matrix.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify frozen fixture bytes
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-input-integrity.json'
+      - name: Run all matched primary workloads in the original mixed order
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-paired-gateway.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION -BaselineRevision $env:BASELINE_REVISION
+          -Architecture X64 -Profile main -Runs 6 -InterleavedControl -CalibrateControl
+          -OutputDirectory '${{ runner.temp }}/phase3-gateway'
+      - name: Retain sources, individual measurements and financial evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mixed-reader-${{ matrix.reference }}
+          path: |
+            ${{ runner.temp }}/phase3-input-integrity.json
+            ${{ runner.temp }}/phase3-gateway
+            ${{ runner.temp }}/phase3-queue
+            ${{ runner.temp }}/phase3-queue-policy
+            ${{ runner.temp }}/phase3-micro-inventory-tests
+            !${{ runner.temp }}/phase3-gateway/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/work/seed-source/**
+            !${{ runner.temp }}/phase3-gateway/*/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/*/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/*/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/*/work/seed-source/**
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+      - name: Evaluate the registered workload budgets
+        shell: pwsh
+        run: |
+          $s = Get-Content -Raw '${{ runner.temp }}/phase3-gateway/summary.json' | ConvertFrom-Json
+          if (!$s.collectionValidated -or !$s.allWorkloadsPassed -or $s.runs.Count -ne 414 -or @($s.comparisons | Group-Object case).Count -ne 23) { throw 'Incomplete mixed collection' }
+          foreach ($g in ($s.comparisons | Group-Object case)) {
+            $pairs = @($g.Group | ForEach-Object { "$($_.baseline)->$($_.candidate)" })
+            if ($pairs.Count -ne 4 -or (Compare-Object $pairs @('fixed->legacy','legacy->fixed','fixed->candidate','legacy->candidate'))) { throw 'Incomplete paired comparisons' }
+          }
+          $failures = @(foreach ($c in $s.comparisons) {
+            if ($c.metrics.serverWindowCpuMillisecondsPerValidated.pairs -ne 6) { throw 'Incomplete CPU pairs' }
+            foreach ($m in $c.metrics.PSObject.Properties) {
+              if ($m.Value.status -eq 'outside-working-threshold') { "$($c.case) $($c.baseline)->$($c.candidate) $($m.Name) $($m.Value.medianPairedRatio)" }
+            }
+          })
+          $failures | Write-Output
+          if ($failures.Count) { throw 'An existing workload budget was exceeded in the mixed replay' }
