@@ -245,6 +245,26 @@ if($Profile -eq 'main'){
     $case.requests, $case.warmupRequests = $sampleCounts[$case.id]
    }
   }
+  # Replay after-usage cancellation on the same Gateway immediately after the original window.
+  # Include the intervening single warmup when computing inclusive process CPU for 110 cancellations.
+  $mainCatalog.cases = @(foreach ($original in $mainCatalog.cases) {
+   $original
+   if ($original.id -ceq 'cancel-after-usage') {
+    $replay = $original | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+    $replay.id = 'cancel-after-check'
+    $replay.requests = 99
+    $replay
+   }
+  })
+  # Keep all four original audio cases in order. Append independently identified larger samples.
+  foreach ($size in @(@('audio-1MiB-c4','audio-1MiB-q4',720), @('audio-8MiB-c1','audio-8MiB-q1',360))) {
+   $original = @($mainCatalog.cases | Where-Object id -ceq $size[0])
+   if ($original.Count -ne 1) { throw 'Missing reference audio workload' }
+   $replay = $original[0] | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+   $replay.id = $size[1]
+   $replay.requests = $size[2]
+   $mainCatalog.cases += $replay
+  }
  }
  if ($isolatedStandard) {
   $mainCatalog.cases = @($mainCatalog.cases | Where-Object id -ceq "standard-$IsolatedStandardChunks")
