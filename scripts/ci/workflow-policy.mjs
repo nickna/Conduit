@@ -29,12 +29,13 @@ export function validateWorkflows(workflows, required) {
       if (job.uses) continue;
       const timeout = job['timeout-minutes'];
       if (name === 'streaming-performance.yml' && id === 'matched' && timeout === '${{ matrix.timeout_minutes }}') {
-        // The full paired mixed and core measurements share one runner.
+        // Each matched job keeps its measurements together on one native runner.
+        const timeLimits = new Map([['main', 180], ['isolated-standard', 150]]);
         const matrix = job.strategy?.matrix;
         const rows = matrix?.include;
         require(Object.keys(matrix ?? {}).length === 1 && Array.isArray(rows) && rows.length > 0 &&
           rows.every(row => Number.isInteger(row.timeout_minutes) && row.timeout_minutes > 0 &&
-            row.timeout_minutes <= (row.profile === 'main' ? 180 : 90)),
+            row.timeout_minutes <= (timeLimits.get(row.profile) ?? 90)),
         `${name}/${id}: missing bounded timeout`);
       } else {
         require(Number.isInteger(timeout) && timeout > 0 && timeout <= 90,

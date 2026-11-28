@@ -54,6 +54,7 @@ test('both native images restore and package the HealthProbe declared by their s
 });
 for (const [name, mutate] of [
   ['unbounded mixed Phase 3 timeout', w => { w['streaming-performance.yml'].jobs.matched.strategy.matrix.include.find(row => row.profile === 'main').timeout_minutes = 181; }],
+  ['isolated Phase 3 timeout over 150', w => { w['streaming-performance.yml'].jobs.matched.strategy.matrix.include.find(row => row.profile === 'isolated-standard').timeout_minutes = 151; }],
   ['pressure Phase 3 timeout over 90', w => { w['streaming-performance.yml'].jobs.matched.strategy.matrix.include.find(row => row.profile === 'pressure').timeout_minutes = 91; }],
   ['routine job timeout over 90', w => { w['ci.yml'].jobs.select['timeout-minutes'] = 91; }],
   ['missing required job', w => w['ci.yml'].jobs.required.needs.pop()],
