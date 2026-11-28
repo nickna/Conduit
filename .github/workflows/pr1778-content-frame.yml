@@ -1,0 +1,172 @@
+name: PR 1778 single-string SSE content frames
+
+on:
+  push:
+    branches: [codex/pr1778-content-frame]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-performance-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  matched:
+    needs: writer-tests
+    name: Isolated content frame versus ${{ matrix.replica }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: isolated-standard
+            timeout_minutes: 180
+            replica: current
+            reference: 'ee0e89fd121755fa8ab9e734a664ebd47e356b71'
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: isolated-standard
+            timeout_minutes: 180
+            replica: pr-base
+            reference: '96ffd94da1286becc60404858c948824235bea93'
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      CANDIDATE_REVISION: 'b62c79fbd755b65b4f8b997623f989a1b8ce8aa2'
+      BASELINE_REVISION: '${{ matrix.reference }}'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify frozen fixture bytes
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-input-integrity.json'
+      - name: Measure isolated standard SSE with a byte-identical control
+        if: matrix.profile == 'isolated-standard'
+        shell: pwsh
+        env:
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/phase3-gateway
+        run: |
+          foreach ($chunks in 100, 1000) {
+            $output = Join-Path $env:EVIDENCE_DIRECTORY "standard-$chunks"
+            ./scripts/performance/phase3/run-paired-gateway.ps1 -CandidateRevision $env:CANDIDATE_REVISION `
+              -BaselineRevision $env:BASELINE_REVISION -Architecture X64 -Runs 12 `
+              -IsolatedStandardChunks $chunks -CalibrateControl -OutputDirectory $output
+          }
+      - name: Retain the first two case summaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: interim-content-frame-${{ matrix.replica }}
+          path: |
+            ${{ runner.temp }}/phase3-gateway/standard-100/summary.json
+            ${{ runner.temp }}/phase3-gateway/standard-1000/summary.json
+            ${{ runner.temp }}/phase3-gateway/standard-1000/qualification-state.json
+          if-no-files-found: error
+      - name: Measure the isolated 10000-chunk case
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-paired-gateway.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION -BaselineRevision $env:BASELINE_REVISION
+          -Architecture X64 -Runs 12 -IsolatedStandardChunks 10000 -CalibrateControl
+          -OutputDirectory '${{ runner.temp }}/phase3-gateway/standard-10000'
+      - name: Retain sources, individual measurements and financial evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-${{ matrix.arch }}-${{ matrix.profile }}-${{ matrix.replica }}
+          path: |
+            ${{ runner.temp }}/phase3-input-integrity.json
+            ${{ runner.temp }}/phase3-gateway
+            ${{ runner.temp }}/phase3-queue
+            ${{ runner.temp }}/phase3-queue-policy
+            ${{ runner.temp }}/phase3-micro-inventory-tests
+            !${{ runner.temp }}/phase3-gateway/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/work/seed-source/**
+            !${{ runner.temp }}/phase3-gateway/*/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/*/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/*/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/*/work/seed-source/**
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+      - name: Check Gateway performance evidence and budgets
+        if: matrix.profile == 'main' || matrix.profile == 'pressure' || matrix.profile == 'isolated-standard'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/check-gateway-budgets.ps1
+          -Profile '${{ matrix.profile }}' -EvidenceDirectory '${{ runner.temp }}/phase3-gateway'
+          -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -CalibrateControl:('${{ matrix.interleaved_control }}' -eq 'true' -or '${{ matrix.profile }}' -eq 'isolated-standard')
+  writer-tests:
+    name: Verify wire bytes, flushes and writer allocation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '11.0.100'
+      - uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
+          suite: content-frame
+          configuration: Release
+          filter: 'FullyQualifiedName~EnhancedSSEResponseWriterTests|FullyQualifiedName~ChatStreamingMetricsTests'
+          minimum: '15'
+          maximum-skips: '0'
+      - name: Verify all framed bytes against the previous writer
+        shell: bash
+        env:
+          BEFORESOURCE: 'ee0e89fd121755fa8ab9e734a664ebd47e356b71'
+          AFTERSOURCE: 'b62c79fbd755b65b4f8b997623f989a1b8ce8aa2'
+        run: |
+          set -euo pipefail
+          for arm in before after; do
+            if [[ $arm == before ]]; then rev=$BEFORESOURCE; else rev=$AFTERSOURCE; fi
+            git worktree add --detach "$RUNNER_TEMP/source-$arm" "$rev"
+            dotnet publish "$RUNNER_TEMP/source-$arm/Tests/ConduitLLM.Benchmarks/ConduitLLM.Benchmarks.csproj" -c Release -p:StreamingMicroOnly=true -o "$RUNNER_TEMP/publish-$arm" > "$RUNNER_TEMP/build-$arm.log" || { tail -50 "$RUNNER_TEMP/build-$arm.log"; exit 1; }
+            dotnet "$RUNNER_TEMP/publish-$arm/ConduitLLM.Benchmarks.dll" writer-micro --output "$RUNNER_TEMP/writer/$arm"
+          done
+          python3 - <<'PY'
+          import json, os, pathlib, statistics as st
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "writer"
+          def read(arm):
+              report = json.loads((root / arm / "writer-micro.json").read_text())
+              return {(r["enhanced"],r["characters"],r["frames"],r["run"]):r["observation"] for r in report["rows"]}
+          before,after = read("before"), read("after")
+          assert len(before)==80 and before.keys()==after.keys()
+          for key in before:
+              a,b = before[key],after[key]
+              assert a["validated"] and b["validated"]
+              for field in ("wireSha256","expectedWireSha256","Bytes","Writes","Flushes","EventsWritten"):
+                  assert a[field]==b[field], (key,field)
+          for group in sorted({k[:3] for k in before}):
+              ratios=[after[k]["processAllocatedBytes"]/before[k]["processAllocatedBytes"] for k in before if k[:3]==group]
+              print(group, "median writer allocation ratio", round(st.median(ratios),4))
+          PY
+      - name: Retain writer receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: writer-content-frame
+          path: |
+            ${{ runner.temp }}/writer
+            ${{ runner.temp }}/build-before.log
+            ${{ runner.temp }}/build-after.log
+          if-no-files-found: warn
+          retention-days: 30
