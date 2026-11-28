@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using ConduitLLM.Gateway.Serialization;
 
+using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Core.Extensions;
@@ -223,6 +224,7 @@ namespace ConduitLLM.Gateway.Endpoints
 
         private async Task HandleStreamingRequestAsync(
             ChatCompletionRequest request,
+            ModelProviderMapping? aliasMapping,
             int? virtualKeyId,
             Stopwatch operationStopwatch,
             CancellationToken cancellationToken)
@@ -245,9 +247,9 @@ namespace ConduitLLM.Gateway.Endpoints
             var requestId = accountingContext.BillingRequestId;
             response.Headers["x-request-id"] = requestId;
 
-            var modelMapping = await _modelMappingService.GetMappingByModelAliasAsync(request.Model);
+            aliasMapping ??= await _modelMappingService.GetMappingByModelAliasAsync(request.Model);
             var metricsCollector = sseWriter.EnhancedEventsEnabled
-                ? new StreamingMetricsCollector(requestId, request.Model, modelMapping?.ProviderId.ToString() ?? "unknown")
+                ? new StreamingMetricsCollector(requestId, request.Model, aliasMapping?.ProviderId.ToString() ?? "unknown")
                 : null;
             var state = new StreamingAccumulatorState(
                 GetCompletionAccumulatorLimit(request),
@@ -382,7 +384,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 finally
                 {
                     await CaptureSelectedRouteForAccountingAsync(request);
-                    var providerLabel = modelMapping?.Provider?.ProviderType.ToString().ToLowerInvariant() ?? "unknown";
+                    var providerLabel = aliasMapping?.Provider?.ProviderType.ToString().ToLowerInvariant() ?? "unknown";
                     SseTransportMetrics.Streams.Add(
                         1,
                         new KeyValuePair<string, object?>(

@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
+using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
@@ -145,7 +146,7 @@ namespace ConduitLLM.Gateway.Endpoints
 
             ApplySessionAffinity(request);
 
-            await PopulateProviderMetadataAsync(request, activity);
+            var aliasMapping = await PopulateProviderMetadataAsync(request, activity);
 
             var modalitySummary = ConduitLLM.Core.Utilities.MultimodalContentInspector.Inspect(request.Messages);
             _logger.LogDebug(
@@ -191,7 +192,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 }
                 else
                 {
-                    await HandleStreamingRequestAsync(request, virtualKeyId, operationStopwatch, cancellationToken);
+                    await HandleStreamingRequestAsync(request, aliasMapping, virtualKeyId, operationStopwatch, cancellationToken);
                     return Results.Empty;
                 }
             }
@@ -364,7 +365,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 hmac.ComputeHash(Encoding.UTF8.GetBytes(affinitySource ?? string.Empty))).ToLowerInvariant();
         }
 
-        private async Task PopulateProviderMetadataAsync(ChatCompletionRequest request, Activity? activity)
+        private async Task<ModelProviderMapping?> PopulateProviderMetadataAsync(ChatCompletionRequest request, Activity? activity)
         {
             try
             {
@@ -389,10 +390,12 @@ namespace ConduitLLM.Gateway.Endpoints
 
                     ConduitLLM.Gateway.Services.ProviderUsagePricing.SetProviderBillingPolicy(HttpContext, modelMapping.Provider);
                 }
+                return modelMapping;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to get provider info for model {Model}", LoggingSanitizer.S(request.Model));
+                return null;
             }
         }
 

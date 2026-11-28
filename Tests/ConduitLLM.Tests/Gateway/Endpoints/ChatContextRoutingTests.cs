@@ -55,7 +55,7 @@ public class ChatContextRoutingTests
         var factory = Factory(client.Object, request);
         var mappings = Mappings();
         var conduit = new Conduit(factory.Object, NullLogger<Conduit>.Instance, Manager(replacement),
-            mappings.Object, Options.Create(new ContextManagementOptions()));
+            Mappings().Object, Options.Create(new ContextManagementOptions()));
         var modelCosts = new Mock<IModelCostService>();
         modelCosts.Setup(service => service.GetCostByIdAsync(17, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ModelCost { Id = 17, IsActive = true,
@@ -103,6 +103,7 @@ public class ChatContextRoutingTests
             Mock.Of<IVirtualKeyRuntimeService>(), Mock.Of<IBillingAuditService>(), Mock.Of<IToolCostCalculationService>());
 
         Assert.Equal(200, context.Response.StatusCode);
+        mappings.Verify(service => service.GetMappingByModelAliasAsync("routed-model"), Times.Once);
         Assert.Equal(0.001m, settled);
         var log = Assert.Single(logs);
         Assert.Equal(settled, log.Cost);
