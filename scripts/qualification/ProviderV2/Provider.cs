@@ -43,9 +43,12 @@ public static class Provider
                 var path = context.Request.Path.Value ?? "";
                 if (path.EndsWith("/audio/transcriptions", StringComparison.Ordinal))
                 {
+                    var uploadEntry = Stopwatch.GetTimestamp();
                     var form = await context.Request.ReadFormAsync(context.RequestAborted);
                     var spec = Wire.Decode(form["prompt"].ToString());
                     observed = NewObservation(spec);
+                    observed.UploadEntryTicks = uploadEntry;
+                    observed.UploadTraceParent = context.Request.Headers["traceparent"].ToString();
                     using var registration = context.RequestAborted.Register(observed.CancellationRecorder.RecordCallback);
                     var file = form.Files.GetFile("file") ?? throw new InvalidDataException("Missing synthetic audio file");
                     Wire.Require(file.Length == spec.InputBytes, "Provider upload length mismatch");

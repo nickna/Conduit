@@ -68,6 +68,8 @@ public sealed class Observation
     public void PublishFinal() => Volatile.Write(ref _handlerEndTicks, Stopwatch.GetTimestamp());
     public int ContentChunksFlushed { get; set; }
     public long BytesFlushed { get; set; }
+    public long UploadEntryTicks { get; set; }
+    public string? UploadTraceParent { get; set; }
     public long UploadBytes { get; set; }
     public string? UploadSha256 { get; set; }
     public bool Completed { get; set; }
@@ -87,7 +89,7 @@ public sealed class Observation
             UsageWriteBeginTicks = UsageWriteBeginTicks, UsageFlushEndTicks = UsageFlushEndTicks,
             DoneWriteBeginTicks = DoneWriteBeginTicks, LastFlushEndTicks = LastFlushEndTicks,
             HandlerEndTicks = ended, ContentChunksFlushed = ContentChunksFlushed, BytesFlushed = BytesFlushed,
-            UploadBytes = UploadBytes, UploadSha256 = UploadSha256, Completed = Completed, Error = Error,
+            UploadEntryTicks = UploadEntryTicks, UploadTraceParent = UploadTraceParent, UploadBytes = UploadBytes, UploadSha256 = UploadSha256, Completed = Completed, Error = Error,
             CancellationTicks = cancellation.ObservedTicks, CancellationEvidence = cancellation
         };
     }
@@ -107,6 +109,8 @@ public sealed record ObservationSnapshot
     public long HandlerEndTicks { get; init; }
     public int ContentChunksFlushed { get; init; }
     public long BytesFlushed { get; init; }
+    public long UploadEntryTicks { get; init; }
+    public string? UploadTraceParent { get; init; }
     public long UploadBytes { get; init; }
     public string? UploadSha256 { get; init; }
     public bool Completed { get; init; }

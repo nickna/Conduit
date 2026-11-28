@@ -129,6 +129,7 @@ internal sealed class ObserverServer
                     lock (_windowLock)
                     {
                         if (_active is not null) { Reply(stream, 409, new("error", Error: "A window is already active.")); return; }
+                        if (id!.Contains("-audio-", StringComparison.Ordinal)) AudioTimingProbe.Start();
                         var snapshot = Capture();
                         _active = new ActiveWindow(id!, snapshot);
                         if (_interval > 0) _timer.Change(_interval, _interval);
@@ -154,6 +155,7 @@ internal sealed class ObserverServer
                                 end.Gen0Collections - start.Gen0Collections, end.Gen1Collections - start.Gen1Collections,
                                 end.Gen2Collections - start.Gen2Collections, end.TotalGcPauseMilliseconds - start.TotalGcPauseMilliseconds));
                         _active = null;
+                        AudioTimingProbe.Finish(window.Id);
                         Reply(stream, 200, new("ok", end, window, Observer: Counters()));
                     }
                     return;
@@ -344,3 +346,38 @@ internal sealed class ProcessSnapshot
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(ObserverResponse))]
 internal partial class ObserverJsonContext : JsonSerializerContext { }
+
+internal static class AudioTimingProbe
+{
+    private static ActivityListener? _listener;
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<(string Trace, string Span, string Source, string Name, long Begin, long End)> Rows = new();
+
+    public static void Start()
+    {
+        _listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name is "Microsoft.AspNetCore" or "System.Net.Http" or "ConduitLLM.Providers",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            SampleUsingParentId = (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData,
+            ActivityStarted = activity => activity.SetCustomProperty("pr1778-audio-start", Stopwatch.GetTimestamp()),
+            ActivityStopped = activity =>
+            {
+                var end = Stopwatch.GetTimestamp();
+                if (activity.GetCustomProperty("pr1778-audio-start") is long begin)
+                    Rows.Enqueue((activity.TraceId.ToHexString(),activity.SpanId.ToHexString(),activity.Source.Name,activity.OperationName,begin,end));
+            }
+        };
+        ActivitySource.AddActivityListener(_listener);
+    }
+
+    public static void Finish(string window)
+    {
+        if (_listener is null) return;
+        _listener.Dispose();
+        _listener = null;
+        var output = new StringBuilder();
+        while (Rows.TryDequeue(out var row))
+            output.AppendLine($"AUDIO-PHASE {window} {row.Trace} {row.Span} {row.Source} {row.Name} {row.Begin} {row.End}");
+        Console.Write(output.ToString());
+    }
+}
