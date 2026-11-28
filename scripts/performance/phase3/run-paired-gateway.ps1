@@ -235,6 +235,7 @@ if($Profile -eq 'main'){
    'enhanced-10000' = @(18, 6)
    # Count tiered compilation during early cancellations in the full CPU window.
    'cancel-before-usage' = @(110, 1)
+   'cancel-after-usage' = @(110, 1)
    'audio-1MiB-c1' = @(180, 30)
    'audio-1MiB-c4' = @(180, 30)
    'audio-8MiB-c1' = @(90, 15)
