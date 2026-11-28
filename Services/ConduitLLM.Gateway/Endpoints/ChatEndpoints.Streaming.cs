@@ -817,7 +817,8 @@ namespace ConduitLLM.Gateway.Endpoints
                 int maximumToolCharacters,
                 int maximumToolCalls)
             {
-                ContentAccumulator = new BoundedStringAccumulator(maximumCompletionCharacters);
+                // An over-limit completion cannot supply a fallback usage estimate.
+                ContentAccumulator = new BoundedStringAccumulator(maximumCompletionCharacters, discardOnOverflow: true);
                 _maximumToolCharacters = maximumToolCharacters;
                 MaximumToolCalls = maximumToolCalls;
             }

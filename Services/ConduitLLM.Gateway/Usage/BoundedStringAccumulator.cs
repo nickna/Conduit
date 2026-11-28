@@ -4,9 +4,15 @@ namespace ConduitLLM.Gateway.UsageTracking;
 
 public sealed class BoundedStringAccumulator
 {
-    private readonly StringBuilder _builder = new();
+    private StringBuilder? _builder = new();
+    private readonly bool _discardOnOverflow;
 
     public BoundedStringAccumulator(int maximumCharacters)
+        : this(maximumCharacters, discardOnOverflow: false)
+    {
+    }
+
+    internal BoundedStringAccumulator(int maximumCharacters, bool discardOnOverflow)
     {
         if (maximumCharacters <= 0)
         {
@@ -14,11 +20,12 @@ public sealed class BoundedStringAccumulator
         }
 
         MaximumCharacters = maximumCharacters;
+        _discardOnOverflow = discardOnOverflow;
     }
 
     public int MaximumCharacters { get; }
 
-    public int Length => _builder.Length;
+    public int Length => _builder?.Length ?? 0;
 
     public long TotalCharactersObserved { get; private set; }
 
@@ -32,22 +39,22 @@ public sealed class BoundedStringAccumulator
         }
 
         TotalCharactersObserved += value.Length;
-        var remaining = MaximumCharacters - _builder.Length;
-        if (remaining <= 0)
-        {
-            LimitExceeded = true;
+        if (_builder is null)
             return;
-        }
 
+        var remaining = MaximumCharacters - _builder.Length;
         if (value.Length > remaining)
         {
-            _builder.Append(value.AsSpan(0, remaining));
             LimitExceeded = true;
+            if (_discardOnOverflow)
+                _builder = null;
+            else if (remaining > 0)
+                _builder.Append(value.AsSpan(0, remaining));
             return;
         }
 
         _builder.Append(value);
     }
 
-    public override string ToString() => _builder.ToString();
+    public override string ToString() => _builder?.ToString() ?? string.Empty;
 }

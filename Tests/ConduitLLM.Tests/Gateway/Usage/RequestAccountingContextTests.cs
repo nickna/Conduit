@@ -68,6 +68,23 @@ public class RequestAccountingContextTests
     }
 
     [Fact]
+    public void EstimationAccumulatorDiscardsTextOnlyAfterTheLimitIsExceeded()
+    {
+        var accumulator = new BoundedStringAccumulator(5, discardOnOverflow: true);
+        accumulator.Append("abc");
+        accumulator.Append("de");
+        Assert.False(accumulator.LimitExceeded);
+        Assert.Equal("abcde", accumulator.ToString());
+
+        accumulator.Append("f");
+        accumulator.Append("ghi");
+        Assert.True(accumulator.LimitExceeded);
+        Assert.Equal(9, accumulator.TotalCharactersObserved);
+        Assert.Equal(0, accumulator.Length);
+        Assert.Equal(string.Empty, accumulator.ToString());
+    }
+
+    [Fact]
     public void BoundedAccumulatorNeverRetainsMoreThanConfiguredLimit()
     {
         var accumulator = new BoundedStringAccumulator(5);
