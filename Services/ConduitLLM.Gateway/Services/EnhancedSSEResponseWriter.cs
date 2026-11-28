@@ -68,11 +68,22 @@ namespace ConduitLLM.Gateway.Services
             
             // OpenAI format uses just "data:" without event type
             var json = JsonSerializer.Serialize(data, GatewayJsonTypeInfo.Require<T>(_jsonOptions));
-            var eventData = $"data: {json}\n\n";
-            var bytes = Encoding.UTF8.GetBytes(eventData);
+            var bytes = EncodeContentFrame(json);
             await _response.Body.WriteAsync(bytes, cancellationToken);
             await _response.Body.FlushAsync(cancellationToken);
             RecordSuccessfulEvent(bytes.Length);
+        }
+
+        private static byte[] EncodeContentFrame(string json)
+        {
+            ReadOnlySpan<byte> prefix = "data: "u8;
+            ReadOnlySpan<byte> ending = "\n\n"u8;
+            var jsonLength = Encoding.UTF8.GetByteCount(json);
+            var frame = new byte[checked(prefix.Length + jsonLength + ending.Length)];
+            prefix.CopyTo(frame);
+            Encoding.UTF8.GetBytes(json, frame.AsSpan(prefix.Length, jsonLength));
+            ending.CopyTo(frame.AsSpan(prefix.Length + jsonLength));
+            return frame;
         }
 
         /// <summary>
