@@ -212,7 +212,7 @@ if($Profile -eq 'main'){
  $mainCatalog.warmupMethod='Separate warmup client invocation excluded from the measured window; extended counts for phase 3'
  $mainCatalog | Add-Member -NotePropertyName phase3BaseCatalogSha256 -NotePropertyValue (Get-FileHash -LiteralPath $catalogSource).Hash.ToLowerInvariant()
  foreach($case in $mainCatalog.cases){
-  # Paced and cancellation cases use their unchanged timing and sample counts.
+  # Slow-reader and cancellation cases retain catalog counts unless calibrated below.
   if($case.slowReadDelayMilliseconds -or $case.cancel){continue}
   if($case.requests -ge 100){
    $case.requests=300
@@ -233,6 +233,8 @@ if($Profile -eq 'main'){
    'enhanced-1000' = @(72, 16)
    'standard-10000' = @(18, 6)
    'enhanced-10000' = @(18, 6)
+   # Count tiered compilation during early cancellations in the full CPU window.
+   'cancel-before-usage' = @(110, 1)
    'audio-1MiB-c1' = @(180, 30)
    'audio-1MiB-c4' = @(180, 30)
    'audio-8MiB-c1' = @(90, 15)
@@ -254,6 +256,8 @@ if($Profile -eq 'main'){
   }[$IsolatedStandardChunks]
   if ($CalibrateControl -and $IsolatedStandardChunks -eq 100) {
    $sampleCounts = @{requests = 600; warmups = 80}
+  } elseif ($CalibrateControl -and $IsolatedStandardChunks -eq 1000) {
+   $sampleCounts = @{requests = 480; warmups = 80}
   }
   $mainCatalog.cases[0].requests = $sampleCounts.requests
   $mainCatalog.cases[0].warmupRequests = $sampleCounts.warmups
