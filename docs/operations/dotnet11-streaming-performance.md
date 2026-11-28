@@ -15,7 +15,7 @@ sources and datasets are unchanged.
 | Experiment | Change and compatibility boundary | Disposition |
 | --- | --- | --- |
 | Enhanced metrics | Replace retained timestamp/interval lists with first/last/count aggregates. Adjacent intervals telescope to `(last - first) / (count - 1)`. The Gateway reads first-token state directly. Preserve the historical distinction between timestamp count and reported token count, including a late `RecordFirstToken`. | Implemented in #1778; focused behavior and allocation-scale checks pass. Native evidence/adoption status is tracked in #1767. |
-| SSE UTF-8 framing | Prototype commit `483f50eec` serialized through generated metadata directly to UTF-8, then copied into a private frame. It reduced intermediate allocations and retained two byte arrays. | Deferred from production: all four original/repeat architecture blocks exceeded the standard-slow process CPU budget. Attribution remains unresolved; the production writer is restored to the before implementation. Prototype/evidence remain available in [#1781](https://github.com/nickna/Conduit/issues/1781). |
+| SSE content framing | Serialize the payload with the existing generated metadata, then encode the JSON directly into the private UTF-8 frame between the `data: ` prefix and two LF bytes. This removes one string allocation per event. | The revised writer passed all three isolated x64 SSE cases against both the PR base and the previous writer. [Native comparison](https://github.com/nickna/Conduit/actions/runs/46126955503) |
 | Groq metadata | Lazily create immutable generated metadata once for the stable client policy. The prototype kept the public options-taking converter independent. | Deferred to #1782. The mixed-variant benchmark showed a repeatable x64 slowdown in the public-options control, even after its method body was restored. Isolated fresh-process evidence is needed before adopting the private cache. |
 | General provider parsing | Benchmark controls characterize DOM/string/typed alternatives. Existing virtual transform/mapping hooks, malformed-frame exceptions and multiline handling make a generic replacement a compatibility change. | Defer to #1779 until those behaviors are specified and qualified. Micro controls alone do not prove compatibility. |
 | BodyWriter / flush coalescing | The UTF-8 candidate keeps the existing `Body.WriteAsync` followed by `Body.FlushAsync` for each event. Complete serialization before writing protects the wire from converter failure. | Defer to #1780; no benchmark establishes a gain or an acceptable latency/backpressure policy for that alternative. |
@@ -34,7 +34,7 @@ serializer/encoder policy, cancellation checks, per-event flush completion,
 error dialects, counters and DONE idempotence. Each call owns its frame through
 the asynchronous write. This ownership check does not promise ordering for
 concurrent calls on an HTTP response. No reusable mutable writer buffer is shared.
-The UTF-8 prototype is preserved in history, rather than active production code.
+The earlier prototype in `483f50eec` serialized to a temporary byte array before copying into the frame. It exceeded the standard-slow CPU budget on x64 and ARM64. [Prototype results](https://github.com/nickna/Conduit/issues/1781)
 
 ## Reproduction and evidence
 
@@ -45,8 +45,8 @@ main job runs the full mixed and expanded core profiles on one VM, with six
 balanced orders of the baseline, its byte-identical copy, and the candidate.
 Each arm has its own seeded SQL/Redis state and fresh Gateway processes.
 The driver hashes the published Gateway and migrator files in both control
-arms to verify equality. Every job has a 90-minute deadline and read-only
-repository permissions. The workflow uploads evidence before checking budgets.
+arms to verify equality. The mixed jobs have a 180-minute deadline, the isolated SSE job has 150 minutes,
+and the other jobs have 90 minutes. All jobs use read-only repository permissions. The workflow uploads evidence before checking budgets.
 
 The gate evaluates the identical-binary comparison in both directions. A
 control breach makes the evidence inconclusive, and the job prints all
@@ -64,8 +64,10 @@ arms across positions on the same runner. Candidate CPU ratios were 0.986,
 The [raw evidence](https://github.com/nickna/Conduit/actions/runs/45554344845/artifacts/14997461747)
 includes the historical comparison's exact candidate and baseline revisions.
 
-The isolated job checks the same candidate thresholds with 600, 120 and 60
-measured requests per repetition, with separate warmups. The frozen workload,
+The isolated job measures 600, 480 and 240 requests per arm for the 100-,
+1,000- and 10,000-chunk cases in each of twelve repetitions. The respective
+warmup counts are 80, 80 and 12. The second six repetitions mirror the first
+six arm orders. The frozen workload,
 payload and concurrency are preserved. The same bidirectional control check
 applies to every evaluated metric. All three arms must pass strict protocol
 validation and financial reconciliation.
