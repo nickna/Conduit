@@ -155,6 +155,42 @@ public class ChatStreamingMetricsTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompletionEvidenceOverflow_PreservesOutputAndProviderUsage(bool hasProviderUsage)
+    {
+        var context = CreateContext(enhanced: false);
+        var chunks = new List<ChatCompletionChunk>
+        {
+            ContentChunk(new string('x', 1024)),
+            ContentChunk("over limit"),
+            ContentChunk("after overflow")
+        };
+        if (hasProviderUsage) chunks.Add(UsageChunk());
+        var endpoints = CreateEndpoints(context, chunks.ToArray());
+        var request = Request(includeUsage: true);
+        request.MaxTokens = 1;
+
+        await endpoints.CreateChatCompletion(request);
+
+        var snapshot = context.GetOrCreateRequestAccountingContext().Snapshot();
+        Assert.Contains("after overflow", ReadBody(context));
+        Assert.True(snapshot.Transport!.EvidenceTruncated);
+        Assert.Equal(chunks.Count, snapshot.Transport.ProviderChunksObserved);
+        if (hasProviderUsage)
+        {
+            Assert.Equal(StreamTransportOutcome.Completed, snapshot.Transport.Outcome);
+            Assert.Equal(15, snapshot.ProviderUsage!.Usage.TotalTokens);
+        }
+        else
+        {
+            Assert.Equal(StreamTransportOutcome.AccountingIndeterminate, snapshot.Transport.Outcome);
+            Assert.True(snapshot.IsIndeterminate);
+            Assert.Null(snapshot.ProviderUsage);
+        }
+    }
+
     /// <summary>Verifies that client cancellation retains provider usage without emitting a completion marker.</summary>
     [Theory]
     [InlineData(false)]

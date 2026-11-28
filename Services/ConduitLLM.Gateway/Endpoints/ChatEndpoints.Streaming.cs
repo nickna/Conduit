@@ -291,8 +291,7 @@ namespace ConduitLLM.Gateway.Endpoints
                         _logger.LogInformation("First chunk received at {Time}ms", (DateTime.UtcNow - firstChunkTime).TotalMilliseconds);
                     }
 
-                    AccumulateContent(chunk, state);
-                    AccumulateToolCalls(chunk, state);
+                    AccumulateUsageEvidence(chunk, state);
                     CaptureUsageData(chunk, request, state);
                     state.LastChunk = chunk;
                     await WriteChunkToStream(chunk, sseWriter, cancellationToken);
@@ -440,30 +439,22 @@ namespace ConduitLLM.Gateway.Endpoints
             };
         }
 
-        private static void AccumulateContent(ChatCompletionChunk chunk, StreamingAccumulatorState state)
+        private static void AccumulateUsageEvidence(ChatCompletionChunk chunk, StreamingAccumulatorState state)
         {
-            if (chunk.Choices == null) return;
+            if (chunk.Choices is null) return;
             foreach (var choice in chunk.Choices)
             {
-                if (!string.IsNullOrEmpty(choice.Delta?.Content))
+                if (choice.Delta is not { } delta) continue;
+                if (state.ContentAccumulator is { } text)
                 {
-                    state.ContentAccumulator.Append(choice.Delta.Content);
+                    if (!string.IsNullOrEmpty(delta.Content)) text.Append(delta.Content);
+                    if (!string.IsNullOrEmpty(delta.Reasoning)) text.Append(delta.Reasoning);
+                    // An incomplete prefix cannot estimate usage. Provider usage and tool
+                    // accounting still run for every subsequent chunk.
+                    if (text.LimitExceeded) state.ContentAccumulator = null;
                 }
-                if (!string.IsNullOrEmpty(choice.Delta?.Reasoning))
-                {
-                    state.ContentAccumulator.Append(choice.Delta.Reasoning);
-                }
-            }
-        }
 
-        private static void AccumulateToolCalls(ChatCompletionChunk chunk, StreamingAccumulatorState state)
-        {
-            if (chunk.Choices == null) return;
-
-            foreach (var choice in chunk.Choices)
-            {
-                if (choice.Delta?.ToolCalls is not { } toolCallDeltas) continue;
-
+                if (delta.ToolCalls is not { } toolCallDeltas) continue;
                 foreach (var toolCallChunk in toolCallDeltas)
                 {
                     var key = (chunk.ProviderIteration ?? 0, choice.Index, toolCallChunk.Index);
@@ -608,10 +599,11 @@ namespace ConduitLLM.Gateway.Endpoints
                 state.Outcome = StreamTransportOutcome.AccountingIndeterminate;
             }
             else if (HttpContext.GetRequestAccountingSnapshot()?.ProviderInvocations?.Count is not > 1 &&
-                (state.ContentAccumulator.Length > 0 || state.AccumulatedToolCalls.Count > 0))
+                state.ContentAccumulator is { } completionText &&
+                (completionText.Length > 0 || state.AccumulatedToolCalls.Count > 0))
             {
                 _logger.LogWarning("No usage data received from provider for streaming response, estimating usage for model {Model}", LoggingSanitizer.S(request.Model));
-                await EstimateStreamingUsageAsync(request, state, cancellationToken);
+                await EstimateStreamingUsageAsync(request, state, completionText, cancellationToken);
             }
             else
             {
@@ -750,11 +742,12 @@ namespace ConduitLLM.Gateway.Endpoints
         private async Task EstimateStreamingUsageAsync(
             ChatCompletionRequest request,
             StreamingAccumulatorState state,
+            BoundedStringAccumulator completionText,
             CancellationToken cancellationToken)
         {
             try
             {
-                var completionOutput = state.ContentAccumulator.ToString();
+                var completionOutput = completionText.ToString();
                 if (state.AccumulatedToolCalls.Count > 0)
                 {
                     var materializedToolCalls = state.MaterializeToolCalls();
@@ -829,7 +822,7 @@ namespace ConduitLLM.Gateway.Endpoints
             public Usage? StreamingUsage { get; set; }
             public ChatCompletionChunk? LastChunk { get; set; }
             public string? StreamingModel { get; set; }
-            public BoundedStringAccumulator ContentAccumulator { get; }
+            public BoundedStringAccumulator? ContentAccumulator { get; set; }
             public Dictionary<(int Iteration, int Choice, int Tool), StreamingToolCallAccumulator> AccumulatedToolCalls { get; } = new();
             public List<ToolExecutionEvent> FunctionExecutionResults { get; } = new();
             public decimal TotalFunctionCost { get; set; }
@@ -837,7 +830,7 @@ namespace ConduitLLM.Gateway.Endpoints
             public ProviderToolUsage? ProviderToolUsage { get; set; }
             public int MaximumToolCalls { get; }
             public bool ToolEvidenceLimitExceeded { get; set; }
-            public bool EvidenceLimitExceeded => ContentAccumulator.LimitExceeded || ToolEvidenceLimitExceeded;
+            public bool EvidenceLimitExceeded => ContentAccumulator is null || ToolEvidenceLimitExceeded;
 
             public bool RetainFunctionExecution(ToolExecutionEvent toolEvent)
             {
