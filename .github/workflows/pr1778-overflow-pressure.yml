@@ -1,0 +1,166 @@
+name: PR 1778 retained estimation text under pressure
+
+on:
+  push:
+    branches: [codex/pr1778-discard-overflow]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-performance-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  matched:
+    needs: usage-tests
+    name: X64 pressure versus ${{ matrix.reference }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: pressure
+            reference: pr-base
+            revision: '96ffd94da1286becc60404858c948824235bea93'
+            timeout_minutes: 90
+            interleaved_control: true
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: pressure
+            reference: current-pr
+            revision: 'eef588094825f84bf74ddd3b7779a244db884ee3'
+            timeout_minutes: 90
+            interleaved_control: true
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      CANDIDATE_REVISION: '46e0badd85f88e45c43cb5848020868c25f3562d'
+      BASELINE_REVISION: ${{ matrix.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify frozen fixture bytes
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-input-integrity.json'
+      - name: Run paired Gateway protocol and financial workloads
+        if: matrix.profile == 'main' || matrix.profile == 'pressure'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-paired-gateway.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION
+          -BaselineRevision $env:BASELINE_REVISION
+          -Architecture '${{ matrix.arch }}'
+          -Profile '${{ matrix.profile }}'
+          -Runs ${{ (matrix.profile == 'pressure' && matrix.interleaved_control) && 12 || matrix.interleaved_control && 6 || 5 }}
+          -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -CalibrateControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -OutputDirectory '${{ runner.temp }}/phase3-gateway'
+      - name: Measure isolated standard SSE with a byte-identical control
+        if: matrix.profile == 'isolated-standard'
+        shell: pwsh
+        env:
+          EVIDENCE_DIRECTORY: ${{ runner.temp }}/phase3-gateway
+        run: |
+          foreach ($chunks in 100, 1000, 10000) {
+            $output = Join-Path $env:EVIDENCE_DIRECTORY "standard-$chunks"
+            ./scripts/performance/phase3/run-paired-gateway.ps1 -CandidateRevision $env:CANDIDATE_REVISION `
+              -BaselineRevision $env:BASELINE_REVISION -Architecture X64 -Runs 12 `
+              -IsolatedStandardChunks $chunks -CalibrateControl -OutputDirectory $output
+          }
+      - name: Verify paired micro evidence rejection
+        if: matrix.profile == 'micro-queue'
+        working-directory: scripts/performance/phase3
+        run: python -m unittest -q test_analyze_micros.py
+      - name: Verify hidden source inventories
+        if: matrix.profile == 'micro-queue'
+        shell: pwsh
+        run: ./scripts/performance/phase3/test-micro-inventory.ps1 -OutputDirectory '${{ runner.temp }}/phase3-micro-inventory-tests'
+      - name: Verify queue evidence rejection
+        if: matrix.profile == 'micro-queue'
+        shell: pwsh
+        run: ./scripts/performance/phase3/test-queue-report.ps1 -OutputPath '${{ runner.temp }}/phase3-queue-policy/receipt.json'
+      - name: Run paired collector, writer and provider micros
+        if: matrix.profile == 'micro-queue'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-paired-micros.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION
+          -Architecture '${{ matrix.arch }}'
+          -OutputDirectory '${{ runner.temp }}/phase3-micros'
+      - name: Retain micro evidence before the queue sweep
+        if: always() && matrix.profile == 'micro-queue'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-${{ matrix.arch }}-micros
+          path: |
+            ${{ runner.temp }}/phase3-micros
+            !${{ runner.temp }}/phase3-micros/work/source/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Run isolated queue batch and PostgreSQL latency sweep
+        if: matrix.profile == 'micro-queue'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-owned-queue.ps1
+          -BenchmarkDll '${{ runner.temp }}/phase3-micros/work/candidate-queue/ConduitLLM.Benchmarks.dll'
+          -Architecture '${{ matrix.arch }}'
+          -OutputDirectory '${{ runner.temp }}/phase3-queue'
+      - name: Retain sources, individual measurements and financial evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: overflow-pressure-${{ matrix.reference }}
+          path: |
+            ${{ runner.temp }}/phase3-input-integrity.json
+            ${{ runner.temp }}/phase3-gateway
+            ${{ runner.temp }}/phase3-queue
+            ${{ runner.temp }}/phase3-queue-policy
+            ${{ runner.temp }}/phase3-micro-inventory-tests
+            !${{ runner.temp }}/phase3-gateway/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/work/seed-source/**
+            !${{ runner.temp }}/phase3-gateway/*/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/*/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/*/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/*/work/seed-source/**
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+      - name: Check Gateway performance evidence and budgets
+        if: matrix.profile == 'main' || matrix.profile == 'pressure' || matrix.profile == 'isolated-standard'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/check-gateway-budgets.ps1
+          -Profile '${{ matrix.profile }}' -EvidenceDirectory '${{ runner.temp }}/phase3-gateway'
+          -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -CalibrateControl:('${{ matrix.interleaved_control }}' -eq 'true' -or '${{ matrix.profile }}' -eq 'isolated-standard')
+  usage-tests:
+    name: Verify bounded usage fallback and streaming behavior
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '11.0.100'
+      - uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
+          suite: bounded-stream-evidence
+          configuration: Release
+          filter: 'FullyQualifiedName~RequestAccountingContextTests|FullyQualifiedName~ChatStreamingMetricsTests|FullyQualifiedName~EnhancedSSEResponseWriterTests|FullyQualifiedName~StreamingUsage'
+          minimum: '20'
+          maximum-skips: '0'
