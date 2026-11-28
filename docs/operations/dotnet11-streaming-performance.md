@@ -188,8 +188,14 @@ CPU allocation is part of the benchmark environment.
 
 Main keeps the same endpoints, payloads, concurrency, and workload rotation.
 It uses longer windows for Responses JSON, ordinary 100-, 1,000-, and
-10,000-chunk SSE, and audio, where earlier controls varied across runs. The
-isolated 100-chunk case measures 600 requests with 80 warmups per arm and
+10,000-chunk SSE, and audio, where earlier controls varied across runs. Each
+cancellation case measures 110 requests after one warmup in the same Gateway
+process. The earlier ten-request post-usage window lasted about ten seconds. The
+expanded x64 windows included three or four Gateway heartbeats and retained CPU
+spent compiling during the early requests. The post-usage CPU comparison met its
+budget against both baseline copies on x64 and ARM64. [Native mixed replay](https://github.com/nickna/Conduit/actions/runs/46126671112)
+
+The isolated 100-chunk case measures 600 requests with 80 warmups per arm and
 repetition. ARM64 pressure keeps its four workload definitions, including the
 original pacing and zero warmups, and runs two balanced six-order blocks.
 All original budgets, both directions of the byte-identical comparison, and
