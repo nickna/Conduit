@@ -71,14 +71,13 @@ namespace ConduitLLM.Gateway.Endpoints
                 return OpenAIError(400, $"Model {model} does not support speech-to-text transcription.", "unsupported_model");
 
             MarkAudioPhase("before-file");
-            using var ms = new MemoryStream();
-            await file.CopyToAsync(ms, cancellationToken);
+            var audioData = await ReadAudioDataAsync(file, cancellationToken);
 
             MarkAudioPhase("file-read");
             var request = new AudioTranscriptionRequest
             {
                 Model = mapping.ProviderModelId,
-                AudioData = ms.ToArray(),
+                AudioData = audioData,
                 FileName = file.FileName,
                 ContentType = file.ContentType,
                 Language = language,
@@ -100,11 +99,9 @@ namespace ConduitLLM.Gateway.Endpoints
                 request.KnownSpeakerReferences = [];
                 foreach (var reference in knownSpeakerReferences)
                 {
-                    using var referenceStream = new MemoryStream();
-                    await reference.CopyToAsync(referenceStream, cancellationToken);
                     request.KnownSpeakerReferences.Add(new AudioTranscriptionReference
                     {
-                        AudioData = referenceStream.ToArray(),
+                        AudioData = await ReadAudioDataAsync(reference, cancellationToken),
                         FileName = reference.FileName,
                         ContentType = reference.ContentType
                     });
@@ -134,6 +131,14 @@ namespace ConduitLLM.Gateway.Endpoints
             if (string.Equals(responseFormat, "text", StringComparison.OrdinalIgnoreCase))
                 return Content(result.Text, "text/plain");
             return Ok(result);
+        }
+
+        private static async Task<byte[]> ReadAudioDataAsync(IFormFile file, CancellationToken cancellationToken)
+        {
+            using var input = file.OpenReadStream();
+            var data = new byte[checked((int)file.Length)];
+            await input.ReadExactlyAsync(data, cancellationToken);
+            return data;
         }
 
         private static System.Text.Json.JsonElement? ParseChunkingStrategy(string? value)
