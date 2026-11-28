@@ -124,9 +124,11 @@ namespace ConduitLLM.Gateway.Endpoints
 
         private static async Task<byte[]> ReadAudioDataAsync(IFormFile file, CancellationToken cancellationToken)
         {
-            using var input = file.OpenReadStream();
             var data = new byte[checked((int)file.Length)];
-            await input.ReadExactlyAsync(data, cancellationToken);
+            using var destination = new MemoryStream(data);
+            await file.CopyToAsync(destination, cancellationToken);
+            if (destination.Position != data.Length)
+                throw new EndOfStreamException("The uploaded audio ended before its declared length.");
             return data;
         }
 
