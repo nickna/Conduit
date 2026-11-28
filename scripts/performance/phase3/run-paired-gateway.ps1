@@ -258,6 +258,8 @@ if($Profile -eq 'main'){
    $sampleCounts = @{requests = 600; warmups = 80}
   } elseif ($CalibrateControl -and $IsolatedStandardChunks -eq 1000) {
    $sampleCounts = @{requests = 480; warmups = 80}
+  } elseif ($CalibrateControl -and $IsolatedStandardChunks -eq 10000) {
+   $sampleCounts = @{requests = 240; warmups = 12}
   }
   $mainCatalog.cases[0].requests = $sampleCounts.requests
   $mainCatalog.cases[0].warmupRequests = $sampleCounts.warmups
