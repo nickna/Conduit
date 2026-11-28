@@ -9,8 +9,10 @@ $diagnostic=$configuration.diagnostic -eq $true -and $configuration.profile -ceq
 if($configuration.diagnostic -and !$diagnostic){throw 'Diagnostic exception is restricted to pressure8'}
 $extendedPressure = $configuration.profile -ceq 'pressure64' -and
  $configuration.interleavedControl -and $configuration.cpuPlacement -and $configuration.runs -eq 12
+$replicateMixed = $configuration.profile -cin @('phase0', 'core') -and
+ $configuration.interleavedControl -and $configuration.cpuPlacement -and $configuration.runs -eq 12
 if($configuration.schemaVersion -ne 1 -or $(if($diagnostic){$configuration.runs -ne 1}else{
- !$extendedPressure -and ($configuration.runs -lt 3 -or $configuration.runs -gt 6)
+ !$extendedPressure -and !$replicateMixed -and ($configuration.runs -lt 3 -or $configuration.runs -gt 6)
 })){throw 'Invalid qualification configuration'}
 if(!$IsLinux){throw 'Matched measurements require native Linux'}
 if((Test-Path -LiteralPath $OutputDirectory) -and @(Get-ChildItem -LiteralPath $OutputDirectory -Force).Count){throw 'Use a fresh output directory; previous evidence must remain unchanged'}
@@ -86,7 +88,7 @@ if($Stage -eq 'prepare'){
 }
 $isolatedStandard = $configuration.profile -ceq 'sse-isol'
 $threeArms = $isolatedStandard -or $configuration.interleavedControl
-if ($threeArms -and ($cohorts.Count -ne 3 -or ($configuration.runs -ne 6 -and !$extendedPressure))) {
+if ($threeArms -and ($cohorts.Count -ne 3 -or ($configuration.runs -ne 6 -and !$extendedPressure -and !$replicateMixed))) {
  throw 'Invalid interleaved cohort or repetition inventory'
 }
 if ($isolatedStandard -and ($cases.Count -ne 1 -or $cases[0].id -cnotin @('standard-100','standard-1000','standard-10000') -or
@@ -150,12 +152,16 @@ foreach($cohort in $cohorts){
 }
 try{
  for($run=1;$run -le $configuration.runs;$run++){
+  # Keep each original workload history together on a fresh Gateway in both blocks.
+  $mirror = $replicateMixed -and $run -gt 6
+  $orderRun = if ($mirror) { 13 - $run } else { $run }
   $order=if($run%2 -eq 1){@($cohorts)}else{@($cohorts[($cohorts.Count-1)..0])}
   if ($threeArms) {
    # Each block of six repetitions places each cohort in each position twice.
-   $first = [int][Math]::Floor(($run - 1) / 2)
-   $direction = if ($run % 2 -eq 1) { 1 } else { 2 }
+   $first = [int][Math]::Floor(($orderRun - 1) / 2)
+   $direction = if ($orderRun % 2 -eq 1) { 1 } else { 2 }
    $order = @(0..2 | ForEach-Object { $cohorts[($first + $direction * $_) % 3] })
+   if ($mirror) { [Array]::Reverse($order) }
   }
   foreach($cohort in $order){
    # Cohort prefixes identify artifacts/control windows only. User/provider
@@ -193,7 +199,7 @@ try{
    Start-Sleep -Seconds 3
    [void](Read-Json "http://127.0.0.1:18084/end?id=$prefix-idle" "$out/$prefix-idle-end.json" $true)
    for($index=0;$index -lt $cases.Count;$index++){
-    $case=$cases[($index+$run-1)%$cases.Count];$id="$prefix-$($case.id)"
+    $case=$cases[($index+$orderRun-1)%$cases.Count];$id="$prefix-$($case.id)"
     $logicalCaseId="$profileName-r$run-$($case.id)"
     $config=[ordered]@{caseId=$logicalCaseId;baseUrl='http://127.0.0.1:18080';providerUrl='http://127.0.0.1:18083';model='native-aot-model'}
     foreach($property in $case.PSObject.Properties){if($property.Name -ne 'id'){$config[$property.Name]=$property.Value}}

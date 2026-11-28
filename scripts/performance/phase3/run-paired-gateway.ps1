@@ -14,7 +14,7 @@ param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$Candidat
 $ErrorActionPreference='Stop'
 $isolatedStandard = $IsolatedStandardChunks -ne 0
 $threeArms = $isolatedStandard -or $InterleavedControl
-$repetitions = if ($Profile -eq 'pressure' -and $CalibrateControl) { 12 } else { 6 }
+$repetitions = if ($InterleavedControl -and $CalibrateControl) { 12 } else { 6 }
 if ($CalibrateControl -and !$threeArms) {
  throw 'Calibration requires a byte-identical control'
 }

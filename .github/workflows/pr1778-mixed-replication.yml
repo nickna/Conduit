@@ -1,0 +1,93 @@
+name: PR 1778 mixed control replication
+
+on:
+  push:
+    branches: [codex/pr1778-mixed-replication]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-performance-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  matched:
+    name: Phase 3 (${{ matrix.arch }}, ${{ matrix.profile }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: main
+            timeout_minutes: 345
+            interleaved_control: true
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+            profile: main
+            timeout_minutes: 345
+            interleaved_control: true
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      CANDIDATE_REVISION: '7327d9e3075992386fa4866c22da68c6db770e7a'
+      BASELINE_REVISION: '96ffd94da1286becc60404858c948824235bea93'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify frozen fixture bytes
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/phase3-input-integrity.json'
+      - name: Run paired Gateway protocol and financial workloads
+        if: matrix.profile == 'main' || matrix.profile == 'pressure'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/run-paired-gateway.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION
+          -BaselineRevision $env:BASELINE_REVISION
+          -Architecture '${{ matrix.arch }}'
+          -Profile '${{ matrix.profile }}'
+          -Runs 12
+          -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -CalibrateControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -OutputDirectory '${{ runner.temp }}/phase3-gateway'
+      - name: Retain sources, individual measurements and financial evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-${{ matrix.arch }}-${{ matrix.profile }}
+          path: |
+            ${{ runner.temp }}/phase3-input-integrity.json
+            ${{ runner.temp }}/phase3-gateway
+            ${{ runner.temp }}/phase3-queue
+            ${{ runner.temp }}/phase3-queue-policy
+            ${{ runner.temp }}/phase3-micro-inventory-tests
+            !${{ runner.temp }}/phase3-gateway/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/work/seed-source/**
+            !${{ runner.temp }}/phase3-gateway/*/work/fixed/**
+            !${{ runner.temp }}/phase3-gateway/*/work/candidate/**
+            !${{ runner.temp }}/phase3-gateway/*/work/legacy/**
+            !${{ runner.temp }}/phase3-gateway/*/work/seed-source/**
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+      - name: Check Gateway performance evidence and budgets
+        if: matrix.profile == 'main' || matrix.profile == 'pressure' || matrix.profile == 'isolated-standard'
+        shell: pwsh
+        run: >-
+          ./scripts/performance/phase3/check-gateway-budgets.ps1
+          -Profile '${{ matrix.profile }}' -EvidenceDirectory '${{ runner.temp }}/phase3-gateway'
+          -InterleavedControl:('${{ matrix.interleaved_control }}' -eq 'true')
+          -CalibrateControl:('${{ matrix.interleaved_control }}' -eq 'true' -or '${{ matrix.profile }}' -eq 'isolated-standard')
